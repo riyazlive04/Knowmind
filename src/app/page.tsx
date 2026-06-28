@@ -1,7 +1,23 @@
+'use client'
+
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { getSession } from '@/lib/auth'
+
 export default function Home() {
-  return (
-    <div className="flex items-center justify-center min-h-screen">
-      <h1 className="text-4xl font-bold">KnowMind</h1>
-    </div>
-  )
+  const router = useRouter()
+
+  useEffect(() => {
+    async function checkAuth() {
+      const session = await getSession()
+      if (session) {
+        router.push('/console')
+      } else {
+        router.push('/console/login')
+      }
+    }
+    checkAuth()
+  }, [router])
+
+  return null
 }

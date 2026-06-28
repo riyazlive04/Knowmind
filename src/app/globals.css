@@ -2,22 +2,72 @@
 @tailwind components;
 @tailwind utilities;
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+@layer base {
+  :root {
+    --font-fraunces: ui-serif, Georgia, serif;
+    --font-inter: ui-sans-serif, system-ui, sans-serif;
+    --color-deep-purple: #3b1c5a;
+    --color-golden-yellow: #e6b44c;
+    --color-honey: #feb737;
+    --color-lavender: #c6b7e2;
+    --color-cream: #f6f1e8;
+    --bg: #f6f1e8;
+    --surface: #ffffff;
+    --border: #e0d6e8;
+    --text: #2c1444;
+    --text-muted: #6b5b7e;
+    --primary: #3b1c5a;
+    --primary-fg: #f6f1e8;
+    --primary-hover: #2c1444;
+    --secondary: #e6b44c;
+    --secondary-fg: #3b1c5a;
+    --secondary-hover: #feb737;
+  }
 
-html {
-  scroll-behavior: smooth;
-}
+  [data-theme='dark'] {
+    --bg: #160b23;
+    --surface: #241338;
+    --surface-2: #3b1c5a;
+    --border: #4a2d63;
+    --text: #f6f1e8;
+    --text-muted: #c6b7e2;
+    --primary: #c6b7e2;
+    --primary-fg: #3b1c5a;
+    --primary-hover: #d9ceea;
+    --secondary: #e6b44c;
+    --secondary-fg: #1e0e2f;
+    --secondary-hover: #feb737;
+  }
 
-body {
-  background-color: #F6F1E8;
-  color: #2C1444;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    color-scheme: light;
+  }
+
+  html[data-theme='dark'] {
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-inter);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-fraunces);
+  }
 }
