@@ -71,37 +71,41 @@ export async function POST(request: NextRequest) {
     const scores = scoreSubmission(rawAnswers)
 
     // Store submission (anon key allows insert)
-    const { data: submission, error: subError } = await supabase
+    // Do NOT use .select() - anon cannot SELECT submissions, only INSERT them
+    const submissionPayload = {
+      round: 'pre',
+      question_version_id: questionVersion.id,
+      raw_answers: rawAnswers,
+      domain_scores: scores.domainScores,
+      overall: scores.overall,
+      personal_competence: scores.personalCompetence,
+      social_competence: scores.socialCompetence,
+      free_text: freeText,
+    }
+
+    const { error: subError } = await supabase
       .from('submission')
-      .insert([
-        {
-          round: 'pre',
-          question_version_id: questionVersion.id,
-          raw_answers: rawAnswers,
-          domain_scores: scores.domainScores,
-          overall: scores.overall,
-          personal_competence: scores.personalCompetence,
-          social_competence: scores.socialCompetence,
-          free_text: freeText,
-        },
-      ])
-      .select()
+      .insert([submissionPayload])
 
     if (subError) {
-      console.error('Submission insert error:', subError)
+      console.error('SUBMIT ERROR:', JSON.stringify(subError, null, 2))
+      console.error('error.code:', subError.code)
+      console.error('error.message:', subError.message)
+      console.error('error.details:', subError.details)
+      console.error('error.hint:', subError.hint)
       throw subError
     }
 
-    if (!submission || submission.length === 0) {
-      throw new Error('Failed to create submission')
-    }
-
     return NextResponse.json({
-      submission: submission[0],
+      submission: submissionPayload,
       scores
     })
   } catch (err: any) {
-    console.error('POST /api/assessment error:', err)
+    console.error('SUBMIT ERROR:', JSON.stringify(err, null, 2))
+    console.error('error.code:', err.code)
+    console.error('error.message:', err.message)
+    console.error('error.details:', err.details)
+    console.error('error.hint:', err.hint)
     return NextResponse.json(
       { error: err.message || 'Failed to submit assessment' },
       { status: 500 }

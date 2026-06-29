@@ -40,6 +40,34 @@
 
 ---
 
+## Critical: Anon INSERT with RLS (Assessment Submission)
+
+**Issue Solved (2026-06-29):** Assessment submission failed 403 "violates RLS for submission" even though anon INSERT policy existed.
+
+**Root Cause:** Code used `.insert(payload).select()` - the `.select()` tried to read the inserted row back, but anon has no SELECT permission on submission, so the entire operation failed.
+
+**Solution:** Never chain `.select()` after `.insert()` for anon-write tables.
+- ✅ Correct: `.insert(payload)` (insert only)
+- ❌ Wrong: `.insert(payload).select()` (insert + read = fails on read)
+- Build result from payload & computed scores, not from DB response
+
+### Key Files:
+- `src/app/assessment/page.tsx` - Client-side submission insert (line 105)
+- `src/app/api/assessment/route.ts` - Server-side submission insert (line 88)
+
+### Why This Matters:
+- Anon can only INSERT submissions (not SELECT)
+- `.select()` tries to read rows immediately after insert
+- RLS blocks the SELECT, failing the whole operation
+- Results page renders from `scores` computed client-side, not from DB
+
+### Common RLS INSERT Bugs to Watch:
+- ❌ Using `.insert().select()` on anon-write tables → fails on SELECT
+- ❌ Creating row with FK to restricted table → FK verification might fail if target is unreadable
+- ❌ Assuming INSERT-only tables need `.select()` → they don't; build result from payload
+
+---
+
 ## Architecture
 
 ### Routes:

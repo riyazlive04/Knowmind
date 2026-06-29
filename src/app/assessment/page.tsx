@@ -99,26 +99,33 @@ export default function AssessmentPage() {
       console.log('Submitting payload:', submissionPayload)
 
       // Insert submission directly to Supabase (anon insert access via RLS)
-      const { data: submission, error: subError } = await supabase
+      // Do NOT use .select() - anon cannot SELECT submissions, only INSERT them
+      const { error: subError } = await supabase
         .from('submission')
         .insert([submissionPayload])
-        .select()
 
-      console.log('Submission response:', { data: submission, error: subError })
+      console.log('Submission insert response:', { error: subError })
 
       if (subError) {
-        console.error('Submission error details:', subError)
+        console.error('SUBMIT ERROR:', JSON.stringify(subError, null, 2))
+        console.error('error.code:', subError.code)
+        console.error('error.message:', subError.message)
+        console.error('error.details:', subError.details)
+        console.error('error.hint:', subError.hint)
         throw subError
       }
-      if (!submission || submission.length === 0) throw new Error('Failed to create submission')
 
-      console.log('Success! Submission:', submission[0])
+      console.log('Success! Submission inserted')
       setResults({
-        submission: submission[0],
+        submission: submissionPayload,
         scores,
       })
     } catch (err: any) {
-      console.error('Submit error:', err)
+      console.error('SUBMIT ERROR:', JSON.stringify(err, null, 2))
+      console.error('error.code:', err.code)
+      console.error('error.message:', err.message)
+      console.error('error.details:', err.details)
+      console.error('error.hint:', err.hint)
       setError(err.message || 'Failed to submit assessment')
     } finally {
       setLoading(false)
