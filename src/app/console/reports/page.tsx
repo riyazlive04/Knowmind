@@ -17,7 +17,9 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
-  const [docxDir, setDocxDir] = useState('')
+  const [docxDir, setDocxDir] = useState(
+    'C:\\dev\\Knowmind_application\\EI_Documents_EOS (1)\\EI Reports\\KnowMind_42_Individual_Reports'
+  )
 
   useEffect(() => {
     loadReports()
