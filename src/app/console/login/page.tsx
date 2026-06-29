@@ -17,7 +17,7 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      await signIn(email, password)
+      await signIn(email.trim(), password.trim())
       router.push('/console')
     } catch (err: any) {
       setError(err.message || 'Login failed')
