@@ -51,6 +51,16 @@ export default function MembersDirectoryPage() {
   // Selection for bulk actions
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
+  // Add member form
+  const [newMemberForm, setNewMemberForm] = useState({
+    name: '',
+    phone: '',
+    location: '',
+    business: '',
+    gender: '',
+    marital_status: '',
+  })
+
   // Load members
   useEffect(() => {
     loadMembers()
@@ -103,6 +113,31 @@ export default function MembersDirectoryPage() {
       setSelectedIds(new Set())
     } else {
       setSelectedIds(new Set(members.map((m) => m.id)))
+    }
+  }
+
+  const handleAddMember = async () => {
+    try {
+      if (!newMemberForm.name.trim()) {
+        alert('Name is required')
+        return
+      }
+
+      const response = await fetch('/api/members-operations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newMemberForm),
+      })
+
+      if (response.ok) {
+        setShowAddForm(false)
+        setNewMemberForm({ name: '', phone: '', location: '', business: '', gender: '', marital_status: '' })
+        loadMembers()
+      } else {
+        alert('Failed to add member')
+      }
+    } catch (err: any) {
+      alert('Error: ' + err.message)
     }
   }
 
@@ -382,6 +417,98 @@ export default function MembersDirectoryPage() {
             >
               Next
             </button>
+          </div>
+        )}
+
+        {/* Add Member Modal */}
+        {showAddForm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div className="bg-surface rounded-lg shadow-lg p-8 border border-border max-w-md w-full">
+              <h2 className="text-2xl font-bold text-primary mb-6 font-fraunces">Add New Member</h2>
+
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-text mb-1">Name *</label>
+                  <input
+                    type="text"
+                    value={newMemberForm.name}
+                    onChange={(e) => setNewMemberForm({ ...newMemberForm, name: e.target.value })}
+                    placeholder="Full name"
+                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-text mb-1">Phone</label>
+                  <input
+                    type="text"
+                    value={newMemberForm.phone}
+                    onChange={(e) => setNewMemberForm({ ...newMemberForm, phone: e.target.value })}
+                    placeholder="Phone number"
+                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-text mb-1">Location</label>
+                  <input
+                    type="text"
+                    value={newMemberForm.location}
+                    onChange={(e) => setNewMemberForm({ ...newMemberForm, location: e.target.value })}
+                    placeholder="City / Region"
+                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-text mb-1">Business</label>
+                  <input
+                    type="text"
+                    value={newMemberForm.business}
+                    onChange={(e) => setNewMemberForm({ ...newMemberForm, business: e.target.value })}
+                    placeholder="Business / Occupation"
+                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-text mb-1">Gender</label>
+                  <input
+                    type="text"
+                    value={newMemberForm.gender}
+                    onChange={(e) => setNewMemberForm({ ...newMemberForm, gender: e.target.value })}
+                    placeholder="Gender"
+                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-text mb-1">Marital Status</label>
+                  <input
+                    type="text"
+                    value={newMemberForm.marital_status}
+                    onChange={(e) => setNewMemberForm({ ...newMemberForm, marital_status: e.target.value })}
+                    placeholder="Marital status"
+                    className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowAddForm(false)}
+                  className="flex-1 px-4 py-2 border border-border rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddMember}
+                  className="flex-1 px-4 py-2 bg-primary text-primary-fg rounded-lg hover:bg-primary-hover transition-colors"
+                >
+                  Add Member
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
