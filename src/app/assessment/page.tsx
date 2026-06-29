@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import { scoreSubmission } from '@/lib/scoring'
 import AssessmentForm from '@/components/assessment/AssessmentForm'
 import ResultsDisplay from '@/components/assessment/ResultsDisplay'
 
@@ -26,10 +28,20 @@ export default function AssessmentPage() {
   useEffect(() => {
     const loadQuestions = async () => {
       try {
-        const res = await fetch('/api/assessment')
-        const data = await res.json()
-        if (data.error) throw new Error(data.error)
-        setQuestionVersion(data.questionVersion)
+        const supabase = createClient()
+
+        // Query Supabase directly for published questions (anon read access via RLS)
+        const { data, error: queryError } = await supabase
+          .from('question_version')
+          .select('*')
+          .eq('status', 'published')
+          .order('version_no', { ascending: false })
+          .limit(1)
+
+        if (queryError) throw queryError
+        if (!data || data.length === 0) throw new Error('No published question version found')
+
+        setQuestionVersion(data[0])
       } catch (err: any) {
         setError(err.message || 'Failed to load assessment')
       } finally {
@@ -43,16 +55,48 @@ export default function AssessmentPage() {
   const handleSubmit = async (rawAnswers: number[], freeText: Record<string, string>) => {
     try {
       setLoading(true)
-      const res = await fetch('/api/assessment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rawAnswers, freeText }),
+      const supabase = createClient()
+
+      // Get latest published questions
+      const { data: qvData, error: qvError } = await supabase
+        .from('question_version')
+        .select('*')
+        .eq('status', 'published')
+        .order('version_no', { ascending: false })
+        .limit(1)
+
+      if (qvError) throw qvError
+      if (!qvData || qvData.length === 0) throw new Error('No published question version found')
+
+      const questionVersion = qvData[0]
+
+      // Score locally
+      const scores = scoreSubmission(rawAnswers)
+
+      // Insert submission directly to Supabase (anon insert access via RLS)
+      const { data: submission, error: subError } = await supabase
+        .from('submission')
+        .insert([
+          {
+            round: 'pre',
+            question_version_id: questionVersion.id,
+            raw_answers: rawAnswers,
+            domain_scores: scores.domainScores,
+            overall: scores.overall,
+            personal_competence: scores.personalCompetence,
+            social_competence: scores.socialCompetence,
+            free_text: freeText,
+          },
+        ])
+        .select()
+
+      if (subError) throw subError
+      if (!submission || submission.length === 0) throw new Error('Failed to create submission')
+
+      setResults({
+        submission: submission[0],
+        scores,
       })
-
-      const data = await res.json()
-      if (data.error) throw new Error(data.error)
-
-      setResults(data)
     } catch (err: any) {
       setError(err.message || 'Failed to submit assessment')
     } finally {
