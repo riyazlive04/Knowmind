@@ -40,23 +40,24 @@ export default function SubmissionsPage() {
   const loadSubmissions = async () => {
     try {
       setLoading(true)
-      const params = new URLSearchParams({
-        page: page.toString(),
-        pageSize: pageSize.toString(),
-        sortBy,
-        sortOrder,
-        ...(roundFilter && { round: roundFilter }),
-        ...(memberNameFilter && { memberName: memberNameFilter }),
-      })
+      const params = new URLSearchParams()
+      params.append('page', page.toString())
+      params.append('pageSize', pageSize.toString())
+      params.append('sortBy', sortBy)
+      params.append('sortOrder', sortOrder)
+      if (roundFilter) params.append('round', roundFilter)
+      if (memberNameFilter) params.append('memberName', memberNameFilter)
 
-      const response = await fetch(`/api/submissions?${params}`)
+      const response = await fetch(`/api/submissions?${params.toString()}`)
       const data: SubmissionsResponse = await response.json()
 
-      setSubmissions(data.submissions)
-      setTotal(data.total)
+      setSubmissions(data.submissions || [])
+      setTotal(data.total || 0)
       setError(null)
     } catch (err: any) {
       setError(err.message)
+      setSubmissions([])
+      setTotal(0)
     } finally {
       setLoading(false)
     }
