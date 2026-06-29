@@ -17,7 +17,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
-  const [docxDir, setDocxDir] = useState('EI_Documents_EOS/KnowMind_42_Individual_Reports')
+  const [docxDir, setDocxDir] = useState('')
 
   useEffect(() => {
     loadReports()
@@ -40,20 +40,33 @@ export default function ReportsPage() {
   const handleGenerateReports = async () => {
     try {
       setGenerating(true)
+      setError(null)
+
       const response = await fetch('/api/reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generate', docxDir }),
+        body: JSON.stringify({
+          action: 'generate',
+          docxDir: docxDir || ''
+        }),
       })
+
       const data = await response.json()
+
       if (!response.ok) {
-        setError(data.error || 'Generation failed')
+        setError(data.message || data.error || 'Generation failed')
+        console.error('Generation error:', data)
         return
       }
-      setError(null)
+
+      // Reload reports
+      await new Promise(r => setTimeout(r, 500))
       await loadReports()
-      alert(`Reports generated! ${data.results.filter((r: any) => r.success).length} succeeded`)
+
+      const successCount = data.results?.filter((r: any) => r.success).length || 0
+      alert(`Reports generated! ${successCount}/${data.results?.length || 0} succeeded`)
     } catch (err: any) {
+      console.error('Error:', err)
       setError(err.message)
     } finally {
       setGenerating(false)
