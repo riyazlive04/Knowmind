@@ -6,21 +6,33 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createClient()
 
-    // Get published question version
-    const { data: questionVersion, error } = await supabase
+    // Get published question version - remove .single() and handle manually
+    const { data, error } = await supabase
       .from('question_version')
       .select('*')
       .eq('status', 'published')
       .order('version_no', { ascending: false })
       .limit(1)
-      .single()
 
-    if (error) throw error
+    if (error) {
+      console.error('Supabase query error:', error)
+      throw error
+    }
+
+    if (!data || data.length === 0) {
+      return NextResponse.json(
+        { error: 'No published question version found' },
+        { status: 404 }
+      )
+    }
+
+    const questionVersion = data[0]
 
     return NextResponse.json({ questionVersion })
   } catch (err: any) {
+    console.error('GET /api/assessment error:', err)
     return NextResponse.json(
-      { error: err.message },
+      { error: err.message || 'Failed to load assessment' },
       { status: 500 }
     )
   }
@@ -34,15 +46,26 @@ export async function POST(request: NextRequest) {
     const supabase = createClient()
 
     // Get latest published question version
-    const { data: questionVersion, error: qvError } = await supabase
+    const { data: qvData, error: qvError } = await supabase
       .from('question_version')
       .select('*')
       .eq('status', 'published')
       .order('version_no', { ascending: false })
       .limit(1)
-      .single()
 
-    if (qvError) throw qvError
+    if (qvError) {
+      console.error('Supabase query error:', qvError)
+      throw qvError
+    }
+
+    if (!qvData || qvData.length === 0) {
+      return NextResponse.json(
+        { error: 'No published question version found' },
+        { status: 404 }
+      )
+    }
+
+    const questionVersion = qvData[0]
 
     // Score the submission
     const scores = scoreSubmission(rawAnswers)
@@ -63,18 +86,24 @@ export async function POST(request: NextRequest) {
         },
       ])
       .select()
-      .single()
 
-    if (subError) throw subError
+    if (subError) {
+      console.error('Submission insert error:', subError)
+      throw subError
+    }
+
+    if (!submission || submission.length === 0) {
+      throw new Error('Failed to create submission')
+    }
 
     return NextResponse.json({
-      submission,
+      submission: submission[0],
       scores
     })
   } catch (err: any) {
-    console.error('Assessment submission error:', err)
+    console.error('POST /api/assessment error:', err)
     return NextResponse.json(
-      { error: err.message },
+      { error: err.message || 'Failed to submit assessment' },
       { status: 500 }
     )
   }
