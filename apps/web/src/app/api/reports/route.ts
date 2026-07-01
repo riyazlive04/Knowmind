@@ -5,8 +5,36 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const memberId = searchParams.get('memberId')
+    const reportId = searchParams.get('reportId')
 
     const supabase = createClient()
+
+    if (reportId) {
+      // Load a single report by its own id (used by the editor).
+      const { data: report, error } = await supabase
+        .from('report')
+        .select('*')
+        .eq('id', reportId)
+        .single()
+
+      if (error) {
+        return NextResponse.json({ error: 'Report not found' }, { status: 404 })
+      }
+
+      const { data: member } = await supabase
+        .from('member')
+        .select('*')
+        .eq('id', report.member_id)
+        .single()
+
+      const { data: submission } = await supabase
+        .from('submission')
+        .select('*')
+        .eq('id', report.submission_id)
+        .single()
+
+      return NextResponse.json({ success: true, report, member, submission })
+    }
 
     if (memberId) {
       // Get report for a specific member

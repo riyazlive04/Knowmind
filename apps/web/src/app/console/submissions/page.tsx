@@ -2,7 +2,24 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Eye } from 'lucide-react'
+import { Eye, Download, ArrowUp, ArrowDown } from 'lucide-react'
+import { Pill, Button, Input, Select } from '@/components/ui'
+import { downloadSheet, type Column } from '@/lib/export/xlsx'
+
+const SUBMISSION_EXPORT_COLUMNS: Column<Submission>[] = [
+  { key: 'id', header: 'Submission ID' },
+  { key: 'member_name', header: 'Member' },
+  { key: 'round', header: 'Round' },
+  { key: 'overall', header: 'Overall' },
+  { key: 'ei_band', header: 'EI Band' },
+  { key: 'created_at', header: 'Created At' },
+]
+
+const BAND_TO_PILL: Record<string, 'developing' | 'emerging' | 'strong' | 'pending'> = {
+  High: 'strong',
+  Moderate: 'emerging',
+  'Needs Support': 'developing',
+}
 
 interface Submission {
   id: string
@@ -65,52 +82,57 @@ export default function SubmissionsPage() {
 
   const totalPages = Math.ceil(total / pageSize)
 
-  const getBandColor = (band: string) => {
-    switch (band) {
-      case 'High':
-        return 'bg-success/20 text-success'
-      case 'Moderate':
-        return 'bg-amber-100 text-amber-700'
-      case 'Needs Support':
-        return 'bg-error/20 text-error'
-      default:
-        return 'bg-gray-100 text-gray-600'
-    }
+  const handleExport = () => {
+    downloadSheet('knowmind-submissions.xlsx', 'Submissions', submissions, SUBMISSION_EXPORT_COLUMNS)
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 to-secondary/5 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-full mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-primary mb-2 font-fraunces">Submissions</h1>
-          <p className="text-text-muted">{total} submission{total !== 1 ? 's' : ''}</p>
+        <div className="mb-8 flex items-center justify-between animate-fade-in-up">
+          <div>
+            <h1 className="text-4xl font-display font-bold text-primary mb-2">Submissions</h1>
+            <p className="text-text-muted">{total} submission{total !== 1 ? 's' : ''}</p>
+          </div>
+          <Button
+            onClick={handleExport}
+            variant="secondary"
+            disabled={submissions.length === 0}
+            title="Export the submissions currently loaded to Excel"
+          >
+            <Download size={18} />
+            Export to Excel
+          </Button>
         </div>
 
         <div className="bg-surface rounded-lg shadow-lg p-6 border border-border mb-8">
           <h3 className="font-semibold text-text mb-4">Filters</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <input
+            <Input
               type="text"
               placeholder="Search by member name..."
               value={memberNameFilter}
               onChange={(e) => { setMemberNameFilter(e.target.value); setPage(0) }}
-              className="px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
             />
-            <select
+            <Select
               value={roundFilter}
               onChange={(e) => { setRoundFilter(e.target.value); setPage(0) }}
-              className="px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="">All Rounds</option>
               <option value="pre">Pre-Assessment</option>
               <option value="mid">Mid-Assessment</option>
               <option value="post">Post-Assessment</option>
-            </select>
+            </Select>
             <button
               onClick={() => { setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); setPage(0) }}
-              className="flex-1 px-3 py-2 border border-border rounded-lg text-sm hover:bg-gray-100"
+              className="inline-flex items-center justify-center gap-1.5 h-11 px-3 border border-ink-200 rounded-md text-sm text-ink-700 hover:bg-purple-50 transition-colors"
             >
-              {sortOrder === 'asc' ? '↑' : '↓'} Date
+              {sortOrder === 'asc' ? (
+                <ArrowUp className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+              ) : (
+                <ArrowDown className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+              )}
+              Date
             </button>
           </div>
         </div>
@@ -141,14 +163,12 @@ export default function SubmissionsPage() {
                 </thead>
                 <tbody>
                   {submissions.map((sub, idx) => (
-                    <tr key={sub.id} className={`border-b border-border ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                    <tr key={sub.id} className={`border-b border-border transition-colors hover:bg-purple-50 ${idx % 2 === 0 ? 'bg-surface' : 'bg-purple-50/30'}`}>
                       <td className="px-4 py-3 font-medium text-text">{sub.member_name}</td>
                       <td className="px-4 py-3 text-text-muted capitalize">{sub.round}</td>
                       <td className="px-4 py-3 text-center font-semibold">{sub.overall.toFixed(2)}</td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${getBandColor(sub.ei_band)}`}>
-                          {sub.ei_band}
-                        </span>
+                        <Pill band={BAND_TO_PILL[sub.ei_band] || 'pending'}>{sub.ei_band}</Pill>
                       </td>
                       <td className="px-4 py-3 text-text-muted text-xs">{new Date(sub.created_at).toLocaleDateString()}</td>
                       <td className="px-4 py-3 text-center">
@@ -172,13 +192,13 @@ export default function SubmissionsPage() {
             <div className="text-center text-text-muted py-8">No submissions found</div>
           ) : (
             submissions.map((sub) => (
-              <Link key={sub.id} href={`/console/submissions/${sub.id}`} className="block bg-surface rounded-lg border border-border p-4">
+              <Link key={sub.id} href={`/console/submissions/${sub.id}`} className="block bg-surface rounded-lg border border-border p-4 transition-colors hover:bg-purple-50">
                 <div className="flex items-start justify-between mb-3">
                   <div>
                     <h3 className="font-semibold text-primary">{sub.member_name}</h3>
                     <p className="text-xs text-text-muted capitalize">{sub.round}</p>
                   </div>
-                  <span className={`text-xs font-semibold px-2 py-1 rounded ${getBandColor(sub.ei_band)}`}>{sub.ei_band}</span>
+                  <Pill band={BAND_TO_PILL[sub.ei_band] || 'pending'}>{sub.ei_band}</Pill>
                 </div>
                 <div className="space-y-1 text-sm">
                   <p>Score: <span className="font-semibold">{sub.overall.toFixed(2)}</span></p>
@@ -191,11 +211,11 @@ export default function SubmissionsPage() {
 
         {totalPages > 1 && (
           <div className="flex items-center justify-center gap-2">
-            <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} className="px-4 py-2 border border-border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100">
+            <button onClick={() => setPage(Math.max(0, page - 1))} disabled={page === 0} className="px-4 py-2 border border-border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-50 transition-colors">
               Previous
             </button>
             <span className="text-sm text-text-muted">Page {page + 1} of {totalPages}</span>
-            <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} className="px-4 py-2 border border-border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100">
+            <button onClick={() => setPage(Math.min(totalPages - 1, page + 1))} disabled={page >= totalPages - 1} className="px-4 py-2 border border-border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-50 transition-colors">
               Next
             </button>
           </div>

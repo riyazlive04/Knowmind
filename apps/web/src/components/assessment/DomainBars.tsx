@@ -1,5 +1,7 @@
 'use client'
 
+import { tokens } from '@/lib/tokens'
+
 interface Domain {
   id: number
   name: string
@@ -11,16 +13,17 @@ interface DomainBarsProps {
 }
 
 export default function DomainBars({ scores, domains }: DomainBarsProps) {
+  // Brand band colors (never red) — strong=green, emerging=purple, developing=gold
   const getBandColor = (score: number) => {
-    if (score >= 4.0) return 'bg-success'
-    if (score >= 3.0) return 'bg-amber-500'
-    return 'bg-error'
+    if (score >= 4.0) return tokens.band.strong
+    if (score >= 3.0) return tokens.band.emerging
+    return tokens.band.developing
   }
 
   const getBandLabel = (score: number) => {
-    if (score >= 4.0) return 'High'
-    if (score >= 3.0) return 'Moderate'
-    return 'Needs Support'
+    if (score >= 4.0) return 'Strong'
+    if (score >= 3.0) return 'Emerging'
+    return 'Developing'
   }
 
   return (
@@ -32,15 +35,15 @@ export default function DomainBars({ scores, domains }: DomainBarsProps) {
         return (
           <div key={domain.id} className="space-y-2">
             <div className="flex justify-between items-center">
-              <label className="font-medium text-text">{domain.name}</label>
-              <span className="text-lg font-bold text-primary">{score.toFixed(2)}</span>
+              <label className="font-medium text-ink-700">{domain.name}</label>
+              <span className="text-lg font-display font-bold text-purple-800">{score.toFixed(2)}</span>
             </div>
 
             {/* Bar */}
-            <div className="w-full h-8 bg-background rounded-lg overflow-hidden border border-border">
+            <div className="w-full h-8 bg-purple-50 rounded-md overflow-hidden border border-ink-100">
               <div
-                className={`h-full transition-all duration-500 flex items-center justify-end pr-2 ${getBandColor(score)}`}
-                style={{ width: `${percentage}%` }}
+                className="h-full transition-all duration-500 flex items-center justify-end pr-2"
+                style={{ width: `${percentage}%`, backgroundColor: getBandColor(score) }}
               >
                 {percentage > 20 && (
                   <span className="text-xs font-semibold text-white">{getBandLabel(score)}</span>
@@ -49,7 +52,7 @@ export default function DomainBars({ scores, domains }: DomainBarsProps) {
             </div>
 
             {/* Scale labels */}
-            <div className="flex justify-between text-xs text-text-muted px-1">
+            <div className="flex justify-between text-xs text-ink-400 px-1">
               <span>1</span>
               <span>2</span>
               <span>3</span>

@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import ReportTemplate from '@/components/report/ReportTemplate'
+import { ArrowLeft } from 'lucide-react'
+import { Button } from '@/components/ui'
 
 interface ReportData {
   report: any
@@ -73,7 +75,7 @@ export default function ReportDetailPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-white py-12 px-4">
-        <p className="text-center text-gray-500">Loading report...</p>
+        <p className="text-center text-ink-500">Loading report...</p>
       </div>
     )
   }
@@ -83,12 +85,11 @@ export default function ReportDetailPage() {
       <div className="min-h-screen bg-gradient-to-br from-primary/5 to-secondary/5 py-12 px-4">
         <div className="max-w-2xl mx-auto">
           <p className="text-center text-error mb-4">{error || 'Report not found'}</p>
-          <button
-            onClick={() => router.push('/console/reports')}
-            className="block mx-auto px-6 py-3 bg-primary text-primary-fg rounded-lg hover:bg-primary-hover"
-          >
-            Back to Reports
-          </button>
+          <div className="flex justify-center">
+            <Button onClick={() => router.push('/console/reports')} variant="purple">
+              Back to Reports
+            </Button>
+          </div>
         </div>
       </div>
     )
@@ -98,31 +99,27 @@ export default function ReportDetailPage() {
     <div className="bg-white">
       {/* Toolbar (hidden on print) */}
       <div
-        className="no-print sticky top-0 z-50 bg-white border-b border-gray-200 px-4 py-4 shadow"
-        style={{ media: 'screen' }}
+        className="no-print sticky top-0 z-50 bg-white border-b border-ink-200 px-4 py-4 shadow-sm"
       >
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <button
             onClick={() => router.back()}
-            className="text-primary hover:text-primary-hover text-sm font-medium"
+            className="inline-flex items-center gap-1.5 text-primary hover:text-primary-hover text-sm font-medium"
           >
-            ← Back
+            <ArrowLeft className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+            Back
           </button>
-          <h1 className="text-lg font-bold text-primary flex-1 text-center font-fraunces">
+          <h1 className="text-lg font-display font-bold text-primary flex-1 text-center">
             {data.member.name} - EI Report
           </h1>
-          <button
-            onClick={handleExportPDF}
-            disabled={generating}
-            className="px-4 py-2 bg-primary text-primary-fg rounded-lg hover:bg-primary-hover text-sm font-medium"
-          >
+          <Button onClick={handleExportPDF} disabled={generating} variant="primary">
             {generating ? 'Exporting...' : 'Export PDF'}
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Report Content */}
-      <div style={{ maxWidth: '900px', margin: '0 auto', padding: '40px 20px' }}>
+      <div className="animate-fade-in-up" style={{ maxWidth: '900px', margin: '0 auto', padding: '40px 20px' }}>
         <ReportTemplate
           member={data.member}
           submission={data.submission}

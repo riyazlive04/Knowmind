@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import ReportTemplate from '@/components/report/ReportTemplate'
-import { Lock, Save, CheckCircle, AlertCircle, Download } from 'lucide-react'
+import { Lock, Save, CheckCircle, AlertCircle, Download, ArrowLeft } from 'lucide-react'
+import { Button } from '@/components/ui'
 
 interface Report {
   id: string
@@ -34,12 +35,12 @@ interface Submission {
 
 const STATES = ['Draft', 'Edited', 'Approved', 'Sent', 'Hold', 'Failed']
 const STATE_COLORS: Record<string, string> = {
-  Draft: 'bg-gray-100 text-gray-700',
-  Edited: 'bg-blue-100 text-blue-700',
-  Approved: 'bg-green-100 text-green-700',
+  Draft: 'bg-ink-100 text-ink-700',
+  Edited: 'bg-info-soft text-info',
+  Approved: 'bg-success-soft text-success',
   Sent: 'bg-purple-100 text-purple-700',
-  Hold: 'bg-amber-100 text-amber-700',
-  Failed: 'bg-error/20 text-error',
+  Hold: 'bg-warning-soft text-warning',
+  Failed: 'bg-danger-soft text-danger',
 }
 
 export default function ReportEditorPage() {
@@ -68,7 +69,7 @@ export default function ReportEditorPage() {
   const loadReport = async () => {
     try {
       setLoading(true)
-      const response = await fetch(`/api/reports?memberId=${reportId.split('-')[0]}`)
+      const response = await fetch(`/api/reports?reportId=${reportId}`)
 
       if (!response.ok) {
         throw new Error('Report not found')
@@ -166,23 +167,22 @@ export default function ReportEditorPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 py-12 px-4">
-        <p className="text-center text-gray-500">Loading report...</p>
+      <div className="min-h-screen bg-cream py-12 px-4">
+        <p className="text-center text-ink-500">Loading report...</p>
       </div>
     )
   }
 
   if (!report || !member || !submission) {
     return (
-      <div className="min-h-screen bg-gray-50 py-12 px-4">
+      <div className="min-h-screen bg-cream py-12 px-4">
         <div className="max-w-2xl mx-auto">
           <p className="text-center text-error mb-4">{error || 'Report not found'}</p>
-          <button
-            onClick={() => router.push('/console/reports')}
-            className="block mx-auto px-6 py-3 bg-primary text-primary-fg rounded-lg hover:bg-primary-hover"
-          >
-            Back to Reports
-          </button>
+          <div className="flex justify-center">
+            <Button onClick={() => router.push('/console/reports')} variant="purple">
+              Back to Reports
+            </Button>
+          </div>
         </div>
       </div>
     )
@@ -199,17 +199,18 @@ export default function ReportEditorPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-cream">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-40 no-print">
+      <div className="bg-surface border-b border-border sticky top-0 z-40 no-print">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 animate-fade-in-up">
             <div>
               <button
                 onClick={() => router.push('/console/reports')}
-                className="text-primary hover:text-primary-hover text-sm font-medium mb-2"
+                className="inline-flex items-center gap-1.5 text-primary hover:text-primary-hover text-sm font-medium mb-2"
               >
-                ← Back to Reports
+                <ArrowLeft className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                Back to Reports
               </button>
               <h1 className="text-3xl font-bold text-primary font-fraunces">{member.name}</h1>
             </div>
@@ -220,34 +221,34 @@ export default function ReportEditorPage() {
 
           {/* Action Buttons */}
           <div className="flex gap-3 flex-wrap">
-            <button
+            <Button
               onClick={handleSave}
               disabled={!isDirty || saving || isLocked}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="primary"
             >
               <Save size={18} />
               {saving ? 'Saving...' : 'Save Changes'}
-            </button>
+            </Button>
 
             <button
               onClick={handleApprove}
               disabled={report.state === 'Sent' || report.state === 'Approved' || approving}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-md font-sans font-semibold text-[15px] bg-success text-white transition-all duration-150 hover:opacity-90 disabled:bg-ink-200 disabled:text-ink-400 disabled:cursor-not-allowed"
             >
               <CheckCircle size={18} />
               {approving ? 'Approving...' : 'Approve'}
             </button>
 
-            <button
+            <Button
               onClick={handleDownloadPDF}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+              variant="purple"
             >
               <Download size={18} />
               Download PDF
-            </button>
+            </Button>
 
             {isLocked && (
-              <div className="flex items-center gap-2 text-gray-600">
+              <div className="flex items-center gap-2 text-ink-500">
                 <Lock size={18} />
                 <span className="text-sm">Locked from editing</span>
               </div>
@@ -261,8 +262,8 @@ export default function ReportEditorPage() {
           )}
 
           {isDirty && (
-            <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p className="text-blue-700 text-sm flex items-center gap-2">
+            <div className="mt-4 bg-info-soft border border-info/30 rounded-lg p-3">
+              <p className="text-info text-sm flex items-center gap-2">
                 <AlertCircle size={16} />
                 You have unsaved changes
               </p>
@@ -286,7 +287,7 @@ export default function ReportEditorPage() {
                 onChange={(e) => handleFieldChange('personal_note', e.target.value)}
                 disabled={isLocked}
                 rows={6}
-                className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:bg-ink-100 disabled:cursor-not-allowed"
                 placeholder="Dear [name],...[signature]"
               />
             </div>
@@ -299,7 +300,7 @@ export default function ReportEditorPage() {
                 onChange={(e) => handleFieldChange('what_you_shared', e.target.value)}
                 disabled={isLocked}
                 rows={4}
-                className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:bg-ink-100 disabled:cursor-not-allowed"
               />
             </div>
 
@@ -311,7 +312,7 @@ export default function ReportEditorPage() {
                 onChange={(e) => handleFieldChange('action_plan', e.target.value)}
                 disabled={isLocked}
                 rows={6}
-                className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="w-full px-4 py-3 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:bg-ink-100 disabled:cursor-not-allowed"
                 placeholder="21-day plan..."
               />
             </div>
@@ -329,25 +330,27 @@ export default function ReportEditorPage() {
                 <div>
                   <p className="text-sm text-text-muted">Primary Strength</p>
                   <p className="font-semibold text-text">
-                    {Object.entries(submission.domain_scores).reduce((a, [, bScore]) => {
-                      const aScore = submission.domain_scores[a] || 0
-                      return bScore > aScore ? Object.keys(submission.domain_scores).find((k) => submission.domain_scores[k] === bScore) || a : a
-                    })}
+                    {(() => {
+                      const entries = Object.entries(submission.domain_scores || {}) as [string, number][]
+                      if (entries.length === 0) return '—'
+                      return entries.reduce((best, cur) => (cur[1] > best[1] ? cur : best))[0]
+                    })()}
                   </p>
                 </div>
 
                 <div>
                   <p className="text-sm text-text-muted">Growth Opportunity</p>
                   <p className="font-semibold text-text">
-                    {Object.entries(submission.domain_scores).reduce((a, [, bScore]) => {
-                      const aScore = submission.domain_scores[a] || 0
-                      return bScore < aScore ? Object.keys(submission.domain_scores).find((k) => submission.domain_scores[k] === bScore) || a : a
-                    })}
+                    {(() => {
+                      const entries = Object.entries(submission.domain_scores || {}) as [string, number][]
+                      if (entries.length === 0) return '—'
+                      return entries.reduce((worst, cur) => (cur[1] < worst[1] ? cur : worst))[0]
+                    })()}
                   </p>
                 </div>
               </div>
 
-              <p className="text-xs text-text-muted mt-4 p-3 bg-gray-50 rounded">
+              <p className="text-xs text-text-muted mt-4 p-3 bg-purple-50 rounded">
                 Scores are computed from assessment data and cannot be edited here. They reflect the member's actual EI assessment results.
               </p>
             </div>

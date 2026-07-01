@@ -1,4 +1,33 @@
-# KnowMind Frontend - Development Guide
+# KnowMind - Development Guide
+
+## Monorepo Layout (restructured 2026-06-30)
+
+Single repo, npm workspaces:
+
+```
+knowmind/
+├─ apps/
+│  ├─ web/      Next.js 14 frontend + console (was the repo root)
+│  └─ api/      Express backend (was Knowmind-app-backend/)
+└─ packages/
+   └─ shared/   @knowmind/shared — canonical EI scoring + types
+```
+
+- Run everything from the repo root: `npm install`, then `npm run build`
+  (builds shared → api → web). Per-app: `npm run dev:web`, `npm run dev:api`.
+- **`packages/shared` must be built before the apps consume it** (`npm run build:shared`);
+  it ships compiled JS from `dist/`.
+- Env files live with each app: `apps/web/.env` (NEXT_PUBLIC_SUPABASE_*),
+  `apps/api/.env` (service-role key). See each app's `.env.example`.
+- **Scoring is now defined once** in `packages/shared/src/index.ts` using the
+  canonical 5/5/5/5/5/2 domain→item mapping. The old web engine used a divergent
+  4/4/4/4/5/6 mapping and produced different scores for the same submission —
+  that duplication is gone. `apps/web/src/lib/scoring.ts` is a thin adapter that
+  maps the shared result into the numbered ({1..6}) shape the UI expects;
+  `apps/api/src/lib/scoring.ts` just re-exports `@knowmind/shared`.
+
+> Paths in the sections below are relative to **`apps/web/`** (e.g.
+> `src/lib/supabase/client.ts` → `apps/web/src/lib/supabase/client.ts`).
 
 ## Critical: SSR Auth Pattern (Session Cookies)
 

@@ -2,7 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { CheckCircle } from 'lucide-react'
 import { callBackendApi } from '@/lib/backendApi'
+import { Button } from '@/components/ui'
 
 interface PreviewData {
   headers: string[]
@@ -114,19 +116,22 @@ export default function ImportPage() {
     <div className="min-h-screen bg-gradient-to-br from-primary/5 to-secondary/5 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="mb-12">
-          <h1 className="text-4xl font-bold text-primary mb-3 font-fraunces">
+        <div className="mb-12 animate-fade-in-up">
+          <h1 className="text-4xl font-display font-bold text-primary mb-3">
             Import Members
           </h1>
           <p className="text-lg text-text-muted">
-            Upload the EI assessment data to import pre-assessment members
+            Upload EI assessment data to import pre-assessment members
           </p>
         </div>
 
         {/* Success Message */}
         {success && (
           <div className="bg-success/10 border border-success rounded-lg p-6 mb-8">
-            <h3 className="text-lg font-semibold text-success mb-4">✓ Import Successful</h3>
+            <h3 className="flex items-center gap-1.5 text-lg font-semibold text-success mb-4">
+              <CheckCircle className="h-5 w-5" strokeWidth={2} aria-hidden="true" />
+              Import Successful
+            </h3>
             <div className="text-sm space-y-2">
               <p>
                 <strong>Members Created:</strong> {success.created}
@@ -168,13 +173,9 @@ export default function ImportPage() {
               />
             </label>
 
-            <button
-              onClick={handlePreview}
-              disabled={!file || loading}
-              className="px-6 py-3 bg-primary text-primary-fg font-medium rounded-lg hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
+            <Button onClick={handlePreview} disabled={!file || loading} variant="primary">
               {loading ? 'Parsing...' : 'Preview'}
-            </button>
+            </Button>
           </div>
         )}
 
@@ -183,7 +184,7 @@ export default function ImportPage() {
           <div className="space-y-8">
             {/* Summary */}
             <div className="bg-surface rounded-lg shadow-lg p-8 border border-border">
-              <h2 className="text-2xl font-bold text-primary mb-6 font-fraunces">
+              <h2 className="text-2xl font-display font-bold text-primary mb-6">
                 Import Preview
               </h2>
 
@@ -204,9 +205,9 @@ export default function ImportPage() {
                   <p className="text-sm text-text-muted">Duplicates</p>
                   <p className="text-2xl font-bold text-error">{preview.preview.duplicate}</p>
                 </div>
-                <div className="bg-gray-100 p-4 rounded-lg">
+                <div className="bg-ink-100 p-4 rounded-lg">
                   <p className="text-sm text-text-muted">Existing</p>
-                  <p className="text-2xl font-bold text-gray-700">
+                  <p className="text-2xl font-bold text-ink-700">
                     {preview.preview.existing}
                   </p>
                 </div>
@@ -248,20 +249,12 @@ export default function ImportPage() {
 
               {/* Action Buttons */}
               <div className="flex gap-4 pt-4 border-t border-border">
-                <button
-                  onClick={() => setPreview(null)}
-                  disabled={loading}
-                  className="px-6 py-3 bg-gray-200 text-gray-800 font-medium rounded-lg hover:bg-gray-300 disabled:opacity-50 transition-colors"
-                >
+                <Button onClick={() => setPreview(null)} disabled={loading} variant="secondary">
                   Back
-                </button>
-                <button
-                  onClick={handleExecuteImport}
-                  disabled={loading}
-                  className="px-6 py-3 bg-primary text-primary-fg font-medium rounded-lg hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
+                </Button>
+                <Button onClick={handleExecuteImport} disabled={loading} variant="primary">
                   {loading ? 'Importing...' : 'Commit Import'}
-                </button>
+                </Button>
               </div>
             </div>
           </div>

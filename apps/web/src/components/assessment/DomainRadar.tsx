@@ -1,5 +1,7 @@
 'use client'
 
+import { tokens } from '@/lib/tokens'
+
 interface Domain {
   id: number
   name: string
@@ -87,9 +89,9 @@ export default function DomainRadar({ scores, domains }: DomainRadarProps) {
       {/* Data polygon fill */}
       <polygon
         points={dataPoints}
-        fill="rgb(139, 92, 246)"
+        fill={tokens.purple[600]}
         fillOpacity="0.2"
-        stroke="rgb(139, 92, 246)"
+        stroke={tokens.purple[600]}
         strokeWidth="2"
       />
 
@@ -100,7 +102,7 @@ export default function DomainRadar({ scores, domains }: DomainRadarProps) {
           cx={p.x}
           cy={p.y}
           r="5"
-          fill="rgb(139, 92, 246)"
+          fill={tokens.gold[500]}
           stroke="white"
           strokeWidth="2"
         />

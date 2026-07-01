@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import DomainRadar from '@/components/assessment/DomainRadar'
 import DomainBars from '@/components/assessment/DomainBars'
+import { ArrowLeft } from 'lucide-react'
+import { Button } from '@/components/ui'
 
 interface Member {
   id: string
@@ -120,12 +122,11 @@ export default function MemberProfilePage() {
       <div className="min-h-screen bg-gradient-to-br from-primary/5 to-secondary/5 py-12 px-4">
         <div className="max-w-2xl mx-auto">
           <p className="text-center text-error mb-4">Member not found</p>
-          <button
-            onClick={() => router.back()}
-            className="block mx-auto px-6 py-3 bg-primary text-primary-fg rounded-lg hover:bg-primary-hover"
-          >
-            Go Back
-          </button>
+          <div className="flex justify-center">
+            <Button onClick={() => router.back()} variant="purple">
+              Go Back
+            </Button>
+          </div>
         </div>
       </div>
     )
@@ -143,8 +144,8 @@ export default function MemberProfilePage() {
 
   const getBandColor = (score: number) => {
     if (score >= 4.0) return 'text-success'
-    if (score >= 3.0) return 'text-amber-600'
-    return 'text-error'
+    if (score >= 3.0) return 'text-purple-600'
+    return 'text-gold-600'
   }
 
   const getBandLabel = (score: number) => {
@@ -156,22 +157,23 @@ export default function MemberProfilePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 to-secondary/5 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex items-center justify-between animate-fade-in-up">
           <div>
             <button
               onClick={() => router.back()}
-              className="text-primary hover:text-primary-hover text-sm font-medium mb-2"
+              className="inline-flex items-center gap-1.5 text-primary hover:text-primary-hover text-sm font-medium mb-2"
             >
-              ← Back to Members
+              <ArrowLeft className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+              Back to Members
             </button>
-            <h1 className="text-4xl font-bold text-primary font-fraunces">{member.name}</h1>
+            <h1 className="text-4xl font-display font-bold text-primary">{member.name}</h1>
           </div>
-          <button
+          <Button
             onClick={() => (editing ? handleSave() : setEditing(true))}
-            className="px-6 py-3 bg-primary text-primary-fg font-medium rounded-lg hover:bg-primary-hover"
+            variant={editing ? 'primary' : 'purple'}
           >
             {editing ? 'Save' : 'Edit Member'}
-          </button>
+          </Button>
         </div>
 
         {error && (
@@ -308,14 +310,14 @@ export default function MemberProfilePage() {
                     </div>
 
                     <div className="text-center">
-                      <div className="text-5xl font-bold text-amber-600 mb-2 font-fraunces">
+                      <div className="text-5xl font-bold text-gold-600 mb-2 font-display">
                         {latestSubmission.personal_competence?.toFixed(2) || 'N/A'}
                       </div>
                       <p className="text-text-muted">Personal Competence</p>
                     </div>
 
                     <div className="text-center">
-                      <div className="text-5xl font-bold text-violet-600 mb-2 font-fraunces">
+                      <div className="text-5xl font-bold text-purple-600 mb-2 font-display">
                         {latestSubmission.social_competence?.toFixed(2) || 'N/A'}
                       </div>
                       <p className="text-text-muted">Social Competence</p>
@@ -342,7 +344,7 @@ export default function MemberProfilePage() {
                       {Object.entries(latestSubmission.free_text).map(([key, value]) => (
                         <div key={key}>
                           <h4 className="font-semibold text-primary mb-2">{key}</h4>
-                          <p className="text-text-muted bg-gray-50 rounded p-4">{value}</p>
+                          <p className="text-text-muted bg-purple-50 rounded p-4">{value}</p>
                         </div>
                       ))}
                     </div>

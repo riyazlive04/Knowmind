@@ -2,7 +2,17 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { CheckSquare, Square, AlertCircle } from 'lucide-react'
+import { CheckSquare, Square, AlertCircle, Download, ArrowUp, ArrowDown } from 'lucide-react'
+import { Button, Input, Select } from '@/components/ui'
+import { downloadSheet, type Column } from '@/lib/export/xlsx'
+
+const REPORT_EXPORT_COLUMNS: Column<Report>[] = [
+  { key: 'id', header: 'Report ID' },
+  { key: 'member_name', header: 'Member' },
+  { key: 'state', header: 'State/Status' },
+  { key: 'created_at', header: 'Created At' },
+  { key: 'updated_at', header: 'Updated At' },
+]
 
 interface Report {
   id: string
@@ -11,6 +21,7 @@ interface Report {
   member_business?: string
   overall_score?: number
   state: string
+  created_at?: string
   updated_at: string
 }
 
@@ -119,13 +130,13 @@ export default function ReportsPipelinePage() {
         }),
       })
 
-      const data = await response.json()
-
       if (!response.ok) {
-        setError(data.message || 'Bulk approve failed')
+        const msg = await response.text()
+        setError(msg.slice(0, 200) || 'Bulk approve failed')
         return
       }
 
+      const data = await response.json()
       alert(data.message)
       setSelectedIds(new Set())
       await loadReports()
@@ -155,38 +166,53 @@ export default function ReportsPipelinePage() {
   const getStateColor = (state: string) => {
     switch (state) {
       case 'Draft':
-        return 'bg-gray-100 text-gray-700'
+        return 'bg-ink-100 text-ink-700'
       case 'Edited':
-        return 'bg-blue-100 text-blue-700'
+        return 'bg-info-soft text-info'
       case 'Approved':
-        return 'bg-green-100 text-green-700'
+        return 'bg-success-soft text-success'
       case 'Sent':
         return 'bg-purple-100 text-purple-700'
       case 'Hold':
-        return 'bg-amber-100 text-amber-700'
+        return 'bg-warning-soft text-warning'
       case 'Failed':
-        return 'bg-red-100 text-red-700'
+        return 'bg-danger-soft text-danger'
       default:
-        return 'bg-gray-100 text-gray-700'
+        return 'bg-ink-100 text-ink-700'
     }
   }
 
   const displayReports = reports.slice(page * pageSize, (page + 1) * pageSize)
   const totalPages = Math.ceil(reports.length / pageSize)
 
+  const handleExport = () => {
+    downloadSheet('knowmind-reports.xlsx', 'Reports', reports, REPORT_EXPORT_COLUMNS)
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 to-secondary/5 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-primary mb-2 font-fraunces">Report Pipeline</h1>
-          <p className="text-text-muted">Review queue for all reports</p>
+        <div className="mb-8 flex items-center justify-between animate-fade-in-up">
+          <div>
+            <h1 className="text-4xl font-display font-bold text-primary mb-2">Report Pipeline</h1>
+            <p className="text-text-muted">Review queue for all reports</p>
+          </div>
+          <Button
+            onClick={handleExport}
+            variant="secondary"
+            disabled={reports.length === 0}
+            title="Export the reports currently loaded to Excel"
+          >
+            <Download size={18} />
+            Export to Excel
+          </Button>
         </div>
 
         {/* State Summary */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
           {Object.entries(stateCounts).map(([state, count]) => (
-            <div key={state} className="bg-white rounded-lg shadow p-4 border border-border text-center">
+            <div key={state} className="bg-surface rounded-lg shadow-sm p-4 border border-border text-center hover-lift">
               <p className="text-sm text-text-muted mb-1">{state}</p>
               <p className="text-3xl font-bold text-primary">{count}</p>
             </div>
@@ -194,17 +220,16 @@ export default function ReportsPipelinePage() {
         </div>
 
         {/* Filters & Actions */}
-        <div className="bg-white rounded-lg shadow-lg p-6 border border-border mb-8">
+        <div className="bg-surface rounded-lg shadow-md p-6 border border-border mb-8">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium text-text mb-1">Filter by State</label>
-              <select
+              <Select
                 value={stateFilter}
                 onChange={(e) => {
                   setStateFilter(e.target.value)
                   setPage(0)
                 }}
-                className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="">All States</option>
                 {Object.keys(stateCounts).map((state) => (
@@ -212,12 +237,12 @@ export default function ReportsPipelinePage() {
                     {state}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-text mb-1">Search Member Name</label>
-              <input
+              <Input
                 type="text"
                 value={nameSearch}
                 onChange={(e) => {
@@ -225,7 +250,6 @@ export default function ReportsPipelinePage() {
                   setPage(0)
                 }}
                 placeholder="Type name..."
-                className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
 
@@ -235,9 +259,14 @@ export default function ReportsPipelinePage() {
                   setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
                   setPage(0)
                 }}
-                className="flex-1 px-3 py-2 border border-border rounded-lg text-sm hover:bg-gray-100"
+                className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-border rounded-lg text-sm hover:bg-purple-50 transition-colors"
               >
-                {sortOrder === 'asc' ? '↑' : '↓'} {sortBy}
+                {sortOrder === 'asc' ? (
+                  <ArrowUp className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                ) : (
+                  <ArrowDown className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                )}
+                {sortBy}
               </button>
             </div>
           </div>
@@ -246,13 +275,13 @@ export default function ReportsPipelinePage() {
           {selectedIds.size > 0 && (
             <div className="flex items-center justify-between pt-4 border-t border-border">
               <p className="text-sm font-medium text-text">{selectedIds.size} selected</p>
-              <button
+              <Button
                 onClick={handleBulkApprove}
                 disabled={bulkApproving}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                variant="primary"
               >
                 {bulkApproving ? 'Approving...' : 'Bulk Approve'}
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -265,7 +294,7 @@ export default function ReportsPipelinePage() {
         )}
 
         {/* Desktop Table */}
-        <div className="hidden sm:block bg-white rounded-lg shadow-lg border border-border overflow-hidden mb-8">
+        <div className="hidden sm:block bg-surface rounded-lg shadow-md border border-border overflow-hidden mb-8">
           {loading ? (
             <div className="p-8 text-center text-text-muted">Loading...</div>
           ) : displayReports.length === 0 ? (
@@ -305,7 +334,7 @@ export default function ReportsPipelinePage() {
                     return (
                       <tr
                         key={report.id}
-                        className={`border-b border-border ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                        className={`border-b border-border transition-colors hover:bg-purple-50 ${idx % 2 === 0 ? 'bg-surface' : 'bg-purple-50/30'}`}
                       >
                         <td className="px-4 py-3">
                           <input
@@ -365,7 +394,7 @@ export default function ReportsPipelinePage() {
               return (
                 <div
                   key={report.id}
-                  className="bg-white rounded-lg border border-border p-4 flex items-start justify-between"
+                  className="bg-surface rounded-lg border border-border p-4 flex items-start justify-between"
                 >
                   <div className="flex items-start gap-3 flex-1">
                     <input
@@ -406,7 +435,7 @@ export default function ReportsPipelinePage() {
             <button
               onClick={() => setPage(Math.max(0, page - 1))}
               disabled={page === 0}
-              className="px-4 py-2 border border-border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              className="px-4 py-2 border border-border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-50 transition-colors"
             >
               Previous
             </button>
@@ -416,7 +445,7 @@ export default function ReportsPipelinePage() {
             <button
               onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
               disabled={page >= totalPages - 1}
-              className="px-4 py-2 border border-border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              className="px-4 py-2 border border-border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-50 transition-colors"
             >
               Next
             </button>

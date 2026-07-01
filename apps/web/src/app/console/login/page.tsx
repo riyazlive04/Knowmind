@@ -3,6 +3,7 @@
 import { FormEvent, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { signIn, onAuthStateChange } from '@/lib/auth'
+import { Button, Card, Input } from '@/components/ui'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -43,26 +44,26 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen">
+    <div className="flex items-center justify-center min-h-screen bg-cream px-4">
       <div className="w-full max-w-md">
-        <div className="bg-surface rounded-lg shadow-lg p-8 border border-border">
-          <h1 className="text-4xl font-bold text-primary mb-2 font-fraunces">
+        <Card tone="base" className="!p-8">
+          <img src="/logo.png" alt="KnowMind Universe" className="h-12 w-auto mb-4" />
+          <h1 className="text-4xl font-display font-bold text-purple-800 mb-2">
             KnowMind
           </h1>
-          <p className="text-text-muted mb-8">Operations Console</p>
+          <p className="text-ink-500 mb-8">Operations Console</p>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium mb-2">
+              <label htmlFor="email" className="block text-sm font-medium text-ink-700 mb-2">
                 Email
               </label>
-              <input
+              <Input
                 id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@knowmind.local"
-                className="w-full px-4 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary"
                 disabled={loading}
                 required
               />
@@ -71,41 +72,41 @@ export default function LoginPage() {
             <div>
               <label
                 htmlFor="password"
-                className="block text-sm font-medium mb-2"
+                className="block text-sm font-medium text-ink-700 mb-2"
               >
                 Password
               </label>
-              <input
+              <Input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full px-4 py-2 border border-border rounded-lg bg-background text-text focus:outline-none focus:ring-2 focus:ring-primary"
                 disabled={loading}
                 required
               />
             </div>
 
             {error && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              <div className="p-4 bg-danger-soft border border-danger/30 rounded-md text-danger text-sm">
                 {error}
               </div>
             )}
 
-            <button
+            <Button
               type="submit"
+              variant="primary"
               disabled={loading}
-              className="w-full py-2 px-4 bg-primary text-primary-fg font-medium rounded-lg hover:bg-primary-hover transition-colors disabled:opacity-50"
+              className="w-full"
             >
               {loading ? 'Signing in...' : 'Sign In'}
-            </button>
+            </Button>
           </form>
 
-          <p className="mt-6 text-center text-text-muted text-sm">
+          <p className="mt-6 text-center text-ink-400 text-sm">
             Single admin access only
           </p>
-        </div>
+        </Card>
       </div>
     </div>
   )

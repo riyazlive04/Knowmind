@@ -1,16 +1,20 @@
 import type { Metadata } from 'next'
-import { Fraunces, Inter } from 'next/font/google'
+import { Plus_Jakarta_Sans, Inter } from 'next/font/google'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
 import './globals.css'
 
-const fraunces = Fraunces({
+// Modern display face for headings/brand (geometric-humanist sans).
+const display = Plus_Jakarta_Sans({
   subsets: ['latin'],
-  variable: '--font-fraunces',
+  weight: ['500', '600', '700', '800'],
+  variable: '--font-display',
   display: 'swap',
 })
 
+// Body / UI text.
 const inter = Inter({
   subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
   variable: '--font-inter',
   display: 'swap',
 })
@@ -28,7 +32,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${inter.variable}`}
+      className={`${display.variable} ${inter.variable}`}
       suppressHydrationWarning
     >
       <body>

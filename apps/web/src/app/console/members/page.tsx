@@ -2,11 +2,35 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { ChevronDown, Edit2, Plus, AlertCircle } from 'lucide-react'
+import { ChevronDown, Edit2, Plus, AlertCircle, Download, Phone, MapPin, Briefcase } from 'lucide-react'
+import { Button, Pill, Input, Select } from '@/components/ui'
+import { downloadSheet, type Column } from '@/lib/export/xlsx'
+
+const MEMBER_EXPORT_COLUMNS: Column<Member>[] = [
+  { key: 'name', header: 'Name' },
+  { key: 'email', header: 'Email' },
+  { key: 'country_code', header: 'Country Code' },
+  { key: 'phone', header: 'Phone' },
+  { key: 'business', header: 'Business' },
+  { key: 'location', header: 'Location' },
+  { key: 'status', header: 'Status' },
+  { key: 'ei_band', header: 'EI Band' },
+  { key: 'overall_score', header: 'Overall Score' },
+  { key: 'created_at', header: 'Created At' },
+]
+
+const BAND_TO_PILL: Record<string, 'developing' | 'emerging' | 'strong' | 'pending'> = {
+  High: 'strong',
+  Moderate: 'emerging',
+  'Needs Support': 'developing',
+}
 
 interface Member {
   id: string
   name: string
+  email?: string
+  country_code?: string
+  status?: string
   phone?: string
   location?: string
   business?: string
@@ -116,6 +140,10 @@ export default function MembersDirectoryPage() {
     }
   }
 
+  const handleExport = () => {
+    downloadSheet('knowmind-members.xlsx', 'Members', members, MEMBER_EXPORT_COLUMNS)
+  }
+
   const handleAddMember = async () => {
     try {
       if (!newMemberForm.name.trim()) {
@@ -158,27 +186,35 @@ export default function MembersDirectoryPage() {
     <div className="min-h-screen bg-gradient-to-br from-primary/5 to-secondary/5 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-full mx-auto">
         {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
+        <div className="mb-8 flex items-center justify-between animate-fade-in-up">
           <div>
-            <h1 className="text-4xl font-bold text-primary mb-2 font-fraunces">Members</h1>
+            <h1 className="text-4xl font-display font-bold text-primary mb-2">Members</h1>
             <p className="text-text-muted">
               {total} member{total !== 1 ? 's' : ''} • {selectedIds.size} selected
             </p>
           </div>
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-fg font-medium rounded-lg hover:bg-primary-hover transition-colors"
-          >
-            <Plus size={20} />
-            Add Member
-          </button>
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={handleExport}
+              variant="secondary"
+              disabled={members.length === 0}
+              title="Export the members currently loaded to Excel"
+            >
+              <Download size={18} />
+              Export to Excel
+            </Button>
+            <Button onClick={() => setShowAddForm(true)} variant="primary">
+              <Plus size={20} />
+              Add Member
+            </Button>
+          </div>
         </div>
 
         {/* Filters */}
         <div className="bg-surface rounded-lg shadow-lg p-6 border border-border mb-8">
           <h3 className="font-semibold text-text mb-4">Filters</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <input
+            <Input
               type="text"
               placeholder="Search by name..."
               value={nameFilter}
@@ -186,16 +222,14 @@ export default function MembersDirectoryPage() {
                 setNameFilter(e.target.value)
                 setPage(0)
               }}
-              className="px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
             />
 
-            <select
+            <Select
               value={businessFilter}
               onChange={(e) => {
                 setBusinessFilter(e.target.value)
                 setPage(0)
               }}
-              className="px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="">All Businesses</option>
               {businesses.map((b) => (
@@ -203,15 +237,14 @@ export default function MembersDirectoryPage() {
                   {b}
                 </option>
               ))}
-            </select>
+            </Select>
 
-            <select
+            <Select
               value={locationFilter}
               onChange={(e) => {
                 setLocationFilter(e.target.value)
                 setPage(0)
               }}
-              className="px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="">All Locations</option>
               {locations.map((l) => (
@@ -219,15 +252,14 @@ export default function MembersDirectoryPage() {
                   {l}
                 </option>
               ))}
-            </select>
+            </Select>
 
-            <select
+            <Select
               value={bandFilter}
               onChange={(e) => {
                 setBandFilter(e.target.value)
                 setPage(0)
               }}
-              className="px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="">All EI Bands</option>
               {bands.map((b) => (
@@ -235,7 +267,7 @@ export default function MembersDirectoryPage() {
                   {b}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
 
@@ -282,9 +314,9 @@ export default function MembersDirectoryPage() {
                     return (
                       <tr
                         key={member.id}
-                        className={`border-b border-border ${
-                          idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'
-                        } ${hasMissing ? 'bg-yellow-50' : ''}`}
+                        className={`border-b border-border transition-colors hover:bg-purple-50 ${
+                          idx % 2 === 0 ? 'bg-surface' : 'bg-purple-50/30'
+                        } ${hasMissing ? 'bg-warning-soft' : ''}`}
                       >
                         <td className="px-4 py-3">
                           <input
@@ -312,19 +344,9 @@ export default function MembersDirectoryPage() {
                         <td className="px-4 py-3 text-text-muted">{member.location || '—'}</td>
                         <td className="px-4 py-3 text-text-muted">{member.business || '—'}</td>
                         <td className="px-4 py-3 text-center">
-                          <span
-                            className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
-                              member.ei_band === 'High'
-                                ? 'bg-success/20 text-success'
-                                : member.ei_band === 'Moderate'
-                                ? 'bg-amber-100 text-amber-700'
-                                : member.ei_band === 'Needs Support'
-                                ? 'bg-error/20 text-error'
-                                : 'bg-gray-100 text-gray-600'
-                            }`}
-                          >
+                          <Pill band={BAND_TO_PILL[member.ei_band] || 'pending'}>
                             {member.ei_band}
-                          </span>
+                          </Pill>
                         </td>
                         <td className="px-4 py-3 text-center">
                           {member.overall_score?.toFixed(2) || '—'}
@@ -359,25 +381,15 @@ export default function MembersDirectoryPage() {
                 <Link
                   key={member.id}
                   href={`/console/members/${member.id}`}
-                  className={`block bg-surface rounded-lg border border-border p-4 ${
-                    missingFlags.length > 0 ? 'border-yellow-400 bg-yellow-50' : ''
+                  className={`block bg-surface rounded-lg border border-border p-4 transition-colors hover:bg-purple-50 ${
+                    missingFlags.length > 0 ? 'border-warning/40 bg-warning-soft' : ''
                   }`}
                 >
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="font-semibold text-primary">{member.name}</h3>
-                    <span
-                      className={`text-xs font-semibold px-2 py-1 rounded ${
-                        member.ei_band === 'High'
-                          ? 'bg-success/20 text-success'
-                          : member.ei_band === 'Moderate'
-                          ? 'bg-amber-100 text-amber-700'
-                          : member.ei_band === 'Needs Support'
-                          ? 'bg-error/20 text-error'
-                          : 'bg-gray-100 text-gray-600'
-                      }`}
-                    >
+                    <Pill band={BAND_TO_PILL[member.ei_band] || 'pending'}>
                       {member.ei_band}
-                    </span>
+                    </Pill>
                   </div>
                   {missingFlags.length > 0 && (
                     <div className="flex items-center gap-1 mb-2 text-xs text-amber-700">
@@ -386,9 +398,24 @@ export default function MembersDirectoryPage() {
                     </div>
                   )}
                   <div className="space-y-1 text-sm text-text-muted">
-                    {member.phone && <p>📞 {member.phone}</p>}
-                    {member.location && <p>📍 {member.location}</p>}
-                    {member.business && <p>💼 {member.business}</p>}
+                    {member.phone && (
+                      <p className="flex items-center gap-1.5">
+                        <Phone className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                        {member.phone}
+                      </p>
+                    )}
+                    {member.location && (
+                      <p className="flex items-center gap-1.5">
+                        <MapPin className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                        {member.location}
+                      </p>
+                    )}
+                    {member.business && (
+                      <p className="flex items-center gap-1.5">
+                        <Briefcase className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+                        {member.business}
+                      </p>
+                    )}
                     {member.overall_score && <p>Score: {member.overall_score.toFixed(2)}</p>}
                   </div>
                 </Link>
@@ -403,7 +430,7 @@ export default function MembersDirectoryPage() {
             <button
               onClick={() => setPage(Math.max(0, page - 1))}
               disabled={page === 0}
-              className="px-4 py-2 border border-border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              className="px-4 py-2 border border-border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-50 transition-colors"
             >
               Previous
             </button>
@@ -413,7 +440,7 @@ export default function MembersDirectoryPage() {
             <button
               onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
               disabled={page >= totalPages - 1}
-              className="px-4 py-2 border border-border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+              className="px-4 py-2 border border-border rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-purple-50 transition-colors"
             >
               Next
             </button>
@@ -424,7 +451,7 @@ export default function MembersDirectoryPage() {
         {showAddForm && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
             <div className="bg-surface rounded-lg shadow-lg p-8 border border-border max-w-md w-full">
-              <h2 className="text-2xl font-bold text-primary mb-6 font-fraunces">Add New Member</h2>
+              <h2 className="text-2xl font-display font-bold text-primary mb-6">Add New Member</h2>
 
               <div className="space-y-4 mb-6">
                 <div>
@@ -495,18 +522,12 @@ export default function MembersDirectoryPage() {
               </div>
 
               <div className="flex gap-3">
-                <button
-                  onClick={() => setShowAddForm(false)}
-                  className="flex-1 px-4 py-2 border border-border rounded-lg hover:bg-gray-100 transition-colors"
-                >
+                <Button onClick={() => setShowAddForm(false)} variant="secondary" className="flex-1">
                   Cancel
-                </button>
-                <button
-                  onClick={handleAddMember}
-                  className="flex-1 px-4 py-2 bg-primary text-primary-fg rounded-lg hover:bg-primary-hover transition-colors"
-                >
+                </Button>
+                <Button onClick={handleAddMember} variant="primary" className="flex-1">
                   Add Member
-                </button>
+                </Button>
               </div>
             </div>
           </div>

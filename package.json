@@ -1,0 +1,20 @@
+{
+  "name": "knowmind",
+  "version": "0.1.0",
+  "private": true,
+  "description": "KnowMind monorepo — Emotional Intelligence assessment platform",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build:shared": "npm run build --workspace @knowmind/shared",
+    "build:web": "npm run build --workspace @knowmind/web",
+    "build:api": "npm run build --workspace @knowmind/api",
+    "build": "npm run build:shared && npm run build:api && npm run build:web",
+    "dev:web": "npm run dev --workspace @knowmind/web",
+    "dev:api": "npm run dev --workspace @knowmind/api",
+    "test": "npm run test --workspace @knowmind/api",
+    "typecheck": "npm run build:shared && npm run build:api && tsc --noEmit --project apps/web/tsconfig.json"
+  }
+}
