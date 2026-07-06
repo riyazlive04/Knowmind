@@ -172,8 +172,13 @@ npm run db:seed       # question_version v1 (published) + admin user
 
 ### Dev Server Port:
 Check console output - likely 3000, but may be 3001+ if ports busy.
-Note: on Node < 22, run the API with `NODE_OPTIONS=--experimental-websocket`
-(Neon's driver needs a global WebSocket that older Node lacks).
+
+### Prisma engine note:
+`@knowmind/db` uses the Rust-free client (`engineType = "client"`) + the Neon
+driver adapter — no native query engine binary. This is what makes it deploy
+cleanly to Vercel serverless (nothing platform-specific to bundle). The Neon
+driver's WebSocket needs are met by the `ws` package (set in
+`packages/db/src/index.ts`), so no Node flags are required.
 
 ### Testing Credentials:
 - Email: `admin@knowmind.in` (or your `ADMIN_EMAIL`)

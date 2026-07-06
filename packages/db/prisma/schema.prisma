@@ -9,9 +9,11 @@
 // frontend, so query rewrites and API responses stay byte-for-byte compatible.
 
 generator client {
-  provider      = "prisma-client-js"
-  // "native" for local dev; the rhel target is the engine Vercel's Node runtime needs.
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  provider   = "prisma-client-js"
+  // engineType "client" = the Rust-free query compiler (stable since 6.16). With
+  // the Neon driver adapter, Prisma runs pure-JS and connects through Neon's
+  // serverless driver, so no native engine has to be bundled into Vercel functions.
+  engineType = "client"
 }
 
 datasource db {

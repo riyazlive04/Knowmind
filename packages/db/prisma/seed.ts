@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client'
-import { hashPassword } from '../src/password'
-
-const prisma = new PrismaClient()
+import 'dotenv/config'
+import { prisma, hashPassword } from '../src'
 
 // The 27 scored items (+ 3 free-text) that make up assessment question_version v1.
 // Mirrors the original 002_seed_questions_v1.sql seed.
