@@ -19,6 +19,12 @@ export function createApp() {
 
   const upload = multer({ storage: multer.memoryStorage() })
 
+  // Root + health. Root gives a friendly response instead of a 404/500 for the
+  // bare domain (the app itself only ever calls /api/* endpoints).
+  app.get('/', (req, res) => {
+    res.json({ service: 'knowmind-api', ok: true })
+  })
+
   app.get('/api/health', (req, res) => {
     res.json({ ok: true })
   })
@@ -115,3 +121,8 @@ export function createApp() {
 
   return app
 }
+
+// Default export = a ready Express app. An Express app is a valid (req, res)
+// handler, so this module works directly as a serverless function too, which
+// keeps Vercel happy however it resolves the entry.
+export default createApp()

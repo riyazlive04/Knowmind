@@ -2,18 +2,16 @@
 //
 // Wrapped with diagnostics: any initialization failure (e.g. DB client setup)
 // is returned in the HTTP response instead of an opaque FUNCTION_INVOCATION_FAILED,
-// so the real cause is visible in the browser. Remove the diagnostics once the
-// deployment is healthy.
+// so the real cause is visible in the browser. Safe to slim down once healthy.
 import type { IncomingMessage, ServerResponse } from 'http'
 
 let handler: ((req: IncomingMessage, res: ServerResponse) => void) | null = null
 let initError: unknown = null
 
 try {
-  // Lazy require so a throw during module init is caught here (a top-level
-  // import would throw before this try/catch could run).
-  const { createApp } = require('../src/app')
-  handler = createApp()
+  // Lazy require so a throw during module init is caught here. Use the ready
+  // Express app (default export) directly.
+  handler = require('../src/app').default
 } catch (e) {
   initError = e
 }
