@@ -9,12 +9,16 @@
   ],
   "scripts": {
     "build:shared": "npm run build --workspace @knowmind/shared",
+    "build:db": "npm run build --workspace @knowmind/db",
     "build:web": "npm run build --workspace @knowmind/web",
     "build:api": "npm run build --workspace @knowmind/api",
-    "build": "npm run build:shared && npm run build:api && npm run build:web",
+    "build": "npm run build:shared && npm run build:db && npm run build:api && npm run build:web",
     "dev:web": "npm run dev --workspace @knowmind/web",
     "dev:api": "npm run dev --workspace @knowmind/api",
+    "db:generate": "npm run generate --workspace @knowmind/db",
+    "db:migrate": "npm run migrate:dev --workspace @knowmind/db",
+    "db:seed": "npm run seed --workspace @knowmind/db",
     "test": "npm run test --workspace @knowmind/api",
-    "typecheck": "npm run build:shared && npm run build:api && tsc --noEmit --project apps/web/tsconfig.json"
+    "typecheck": "npm run build:shared && npm run build:db && npm run build:api && tsc --noEmit --project apps/web/tsconfig.json"
   }
 }

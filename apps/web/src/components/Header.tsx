@@ -3,8 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTheme } from 'next-themes'
-import { signOut } from '@/lib/auth'
-import { createClient } from '@/lib/supabase/client'
+import { signOut, getSession } from '@/lib/auth'
 import { Button } from '@/components/ui'
 import { Menu, Sun, Moon, LogOut } from 'lucide-react'
 
@@ -16,16 +15,13 @@ export function Header({ onMenuClick }: { onMenuClick: () => void }) {
 
   useEffect(() => {
     setMounted(true)
-    const getUser = async () => {
-      const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (user) {
-        setUserEmail(user.email || '')
+    const loadUser = async () => {
+      const session = await getSession()
+      if (session?.user?.email) {
+        setUserEmail(session.user.email)
       }
     }
-    getUser()
+    loadUser()
   }, [])
 
   async function handleSignOut() {

@@ -1,11 +1,10 @@
-import { createServiceClient } from '@/lib/supabase/service'
+import { prisma } from '@knowmind/db'
 import { NextRequest, NextResponse } from 'next/server'
 
 // Console API for managing "tests" (question_version rows) and their questions.
 //
 // A test == one question_version (status: draft | published, items: JSONB[]).
-// Anon is read-only (published only) on question_version, so all console
-// create/update operations run with the service-role key.
+// All create/update operations run server-side via Prisma against Neon.
 //
 // Question item shape (matches what AssessmentForm / scoring expect):
 //   { id, domain (1..6), domain_name, text, type: 'likert'|'free_text', reverse }
@@ -33,8 +32,8 @@ type QuestionItem = {
   placeholder?: string
 }
 
-function svc() {
-  return createServiceClient()
+function asItems(value: unknown): QuestionItem[] {
+  return Array.isArray(value) ? (value as QuestionItem[]) : []
 }
 
 // GET /api/questions            -> list all tests (with item counts)
@@ -42,26 +41,19 @@ function svc() {
 export async function GET(request: NextRequest) {
   try {
     const id = new URL(request.url).searchParams.get('id')
-    const supabase = svc()
 
     if (id) {
-      const { data, error } = await supabase
-        .from('question_version')
-        .select('*')
-        .eq('id', id)
-        .single()
-      if (error) return NextResponse.json({ error: 'Test not found' }, { status: 404 })
+      const data = await prisma.questionVersion.findUnique({ where: { id } })
+      if (!data) return NextResponse.json({ error: 'Test not found' }, { status: 404 })
       return NextResponse.json({ test: data })
     }
 
-    const { data, error } = await supabase
-      .from('question_version')
-      .select('*')
-      .order('version_no', { ascending: false })
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const data = await prisma.questionVersion.findMany({
+      orderBy: { version_no: 'desc' },
+    })
 
-    const tests = (data || []).map((t: any) => {
-      const items: QuestionItem[] = Array.isArray(t.items) ? t.items : []
+    const tests = data.map((t) => {
+      const items = asItems(t.items)
       return {
         id: t.id,
         version_no: t.version_no,
@@ -84,31 +76,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { action } = body
 
-    let supabase
-    try {
-      supabase = svc()
-    } catch (e: any) {
-      return NextResponse.json(
-        { error: 'Question management is not configured (missing service-role key).' },
-        { status: 500 }
-      )
-    }
-
     // --- Create a new draft test ---
     if (action === 'createTest') {
-      const { data: rows } = await supabase
-        .from('question_version')
-        .select('version_no')
-        .order('version_no', { ascending: false })
-        .limit(1)
-      const nextNo = (rows?.[0]?.version_no ?? 0) + 1
+      const latest = await prisma.questionVersion.findFirst({
+        orderBy: { version_no: 'desc' },
+        select: { version_no: true },
+      })
+      const nextNo = (latest?.version_no ?? 0) + 1
 
-      const { data, error } = await supabase
-        .from('question_version')
-        .insert([{ version_no: nextNo, status: 'draft', items: [] }])
-        .select('*')
-        .single()
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      const data = await prisma.questionVersion.create({
+        data: { version_no: nextNo, status: 'draft', items: [] },
+      })
       return NextResponse.json({ test: data })
     }
 
@@ -128,16 +106,15 @@ export async function POST(request: NextRequest) {
       if (type === 'likert' && !domainDef)
         return NextResponse.json({ error: 'A valid domain (1-6) is required for likert questions' }, { status: 400 })
 
-      const { data: current, error: loadErr } = await supabase
-        .from('question_version')
-        .select('items, status')
-        .eq('id', id)
-        .single()
-      if (loadErr) return NextResponse.json({ error: 'Test not found' }, { status: 404 })
+      const current = await prisma.questionVersion.findUnique({
+        where: { id },
+        select: { items: true, status: true },
+      })
+      if (!current) return NextResponse.json({ error: 'Test not found' }, { status: 404 })
       if (current.status === 'published')
         return NextResponse.json({ error: 'Cannot edit a published test. Create a new version.' }, { status: 409 })
 
-      const items: QuestionItem[] = Array.isArray(current.items) ? current.items : []
+      const items = asItems(current.items)
       const nextId = items.reduce((m, i) => Math.max(m, i.id || 0), 0) + 1
 
       const newItem: QuestionItem =
@@ -146,13 +123,10 @@ export async function POST(request: NextRequest) {
           : { id: nextId, domain, domain_name: domainDef!.name, text, type, reverse }
 
       const updated = [...items, newItem]
-      const { data, error } = await supabase
-        .from('question_version')
-        .update({ items: updated })
-        .eq('id', id)
-        .select('*')
-        .single()
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      const data = await prisma.questionVersion.update({
+        where: { id },
+        data: { items: updated as any },
+      })
       return NextResponse.json({ test: data, added: newItem })
     }
 
@@ -174,16 +148,15 @@ export async function POST(request: NextRequest) {
       if (type === 'likert' && !domainDef)
         return NextResponse.json({ error: 'A valid domain (1-6) is required for likert questions' }, { status: 400 })
 
-      const { data: current, error: loadErr } = await supabase
-        .from('question_version')
-        .select('items, status')
-        .eq('id', id)
-        .single()
-      if (loadErr) return NextResponse.json({ error: 'Test not found' }, { status: 404 })
+      const current = await prisma.questionVersion.findUnique({
+        where: { id },
+        select: { items: true, status: true },
+      })
+      if (!current) return NextResponse.json({ error: 'Test not found' }, { status: 404 })
       if (current.status === 'published')
         return NextResponse.json({ error: 'Cannot edit a published test. Create a new version.' }, { status: 409 })
 
-      const items: QuestionItem[] = Array.isArray(current.items) ? current.items : []
+      const items = asItems(current.items)
       if (!items.some((i) => i.id === questionId))
         return NextResponse.json({ error: 'Question not found in this test' }, { status: 404 })
 
@@ -195,13 +168,10 @@ export async function POST(request: NextRequest) {
           : i
       )
 
-      const { data, error } = await supabase
-        .from('question_version')
-        .update({ items: updatedItems })
-        .eq('id', id)
-        .select('*')
-        .single()
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      const data = await prisma.questionVersion.update({
+        where: { id },
+        data: { items: updatedItems as any },
+      })
       return NextResponse.json({ test: data })
     }
 
@@ -210,24 +180,20 @@ export async function POST(request: NextRequest) {
       const { id, questionId } = body
       if (!id) return NextResponse.json({ error: 'Test id required' }, { status: 400 })
 
-      const { data: current, error: loadErr } = await supabase
-        .from('question_version')
-        .select('items, status')
-        .eq('id', id)
-        .single()
-      if (loadErr) return NextResponse.json({ error: 'Test not found' }, { status: 404 })
+      const current = await prisma.questionVersion.findUnique({
+        where: { id },
+        select: { items: true, status: true },
+      })
+      if (!current) return NextResponse.json({ error: 'Test not found' }, { status: 404 })
       if (current.status === 'published')
         return NextResponse.json({ error: 'Cannot edit a published test.' }, { status: 409 })
 
-      const items: QuestionItem[] = Array.isArray(current.items) ? current.items : []
+      const items = asItems(current.items)
       const updated = items.filter((i) => i.id !== questionId)
-      const { data, error } = await supabase
-        .from('question_version')
-        .update({ items: updated })
-        .eq('id', id)
-        .select('*')
-        .single()
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      const data = await prisma.questionVersion.update({
+        where: { id },
+        data: { items: updated as any },
+      })
       return NextResponse.json({ test: data })
     }
 
@@ -236,8 +202,7 @@ export async function POST(request: NextRequest) {
       const { id } = body
       if (!id) return NextResponse.json({ error: 'Test id required' }, { status: 400 })
 
-      const { error } = await supabase.from('question_version').delete().eq('id', id)
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      await prisma.questionVersion.delete({ where: { id } })
       return NextResponse.json({ ok: true, deletedId: id })
     }
 
@@ -247,13 +212,10 @@ export async function POST(request: NextRequest) {
       if (!id || !['draft', 'published'].includes(status))
         return NextResponse.json({ error: 'Valid id and status (draft|published) required' }, { status: 400 })
 
-      const { data, error } = await supabase
-        .from('question_version')
-        .update({ status })
-        .eq('id', id)
-        .select('*')
-        .single()
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      const data = await prisma.questionVersion.update({
+        where: { id },
+        data: { status },
+      })
       return NextResponse.json({ test: data })
     }
 

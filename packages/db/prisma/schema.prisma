@@ -1,0 +1,157 @@
+// KnowMind database schema (Prisma + Neon Postgres).
+//
+// Modeled from the ACTUAL column usage in the application code (the authoritative
+// contract), not the historical SQL migrations, which had drift. Notably:
+//   - report uses `personal_note` (not `note`); state is mixed-case free text.
+//   - audit follows the 007 shape (report_id/member_id/changed_fields/...).
+//   - submission.member_id and .question_version_id are both nullable.
+// Scalar fields are snake_case to match the existing JSON contract returned to the
+// frontend, so query rewrites and API responses stay byte-for-byte compatible.
+
+generator client {
+  provider      = "prisma-client-js"
+  // "native" for local dev; the rhel target is the engine Vercel's Node runtime needs.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Member {
+  id                String   @id @default(uuid()) @db.Uuid
+  name              String
+  email             String?
+  phone             String?  @unique
+  country_code      String?
+  location          String?
+  business          String?
+  gender            String?
+  marital_status    String?
+  notes             String?
+  status            String?  @default("active")
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime @updatedAt @db.Timestamptz(6)
+
+  submissions Submission[]
+  reports     Report[]
+  audits      Audit[]
+
+  @@index([name])
+  @@index([business])
+  @@index([location])
+  @@map("member")
+}
+
+model QuestionVersion {
+  id         String   @id @default(uuid()) @db.Uuid
+  version_no Int
+  status     String   @default("draft")
+  items      Json
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+
+  submissions Submission[]
+
+  @@map("question_version")
+}
+
+model Submission {
+  id                  String   @id @default(uuid()) @db.Uuid
+  member_id           String?  @db.Uuid
+  round               String
+  question_version_id String?  @db.Uuid
+  raw_answers         Json?
+  domain_scores       Json
+  overall             Float
+  personal_competence Float?
+  social_competence   Float?
+  free_text           Json?
+  result_token        String?  @unique @default(uuid()) @db.Uuid
+  created_at          DateTime @default(now()) @db.Timestamptz(6)
+
+  member           Member?          @relation(fields: [member_id], references: [id], onDelete: SetNull)
+  question_version QuestionVersion? @relation(fields: [question_version_id], references: [id])
+  reports          Report[]
+
+  @@index([member_id])
+  @@index([round])
+  @@index([created_at])
+  @@map("submission")
+}
+
+model Report {
+  id               String   @id @default(uuid()) @db.Uuid
+  member_id        String   @db.Uuid
+  submission_id    String   @db.Uuid
+  state            String   @default("Draft")
+  personal_note    String?
+  what_you_shared  String?
+  action_plan      String?
+  pdf_url          String?
+  share_link_token String?  @unique
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime @updatedAt @db.Timestamptz(6)
+
+  member     Member     @relation(fields: [member_id], references: [id], onDelete: Cascade)
+  submission Submission @relation(fields: [submission_id], references: [id], onDelete: Cascade)
+  deliveries Delivery[]
+  audits     Audit[]
+
+  @@index([member_id])
+  @@index([submission_id])
+  @@index([state])
+  @@map("report")
+}
+
+model Delivery {
+  id                   String    @id @default(uuid()) @db.Uuid
+  report_id            String    @db.Uuid
+  channel              String
+  status               String    @default("pending")
+  evolution_message_id String?
+  attempt              Int       @default(0)
+  error                String?
+  sent_at              DateTime? @db.Timestamptz(6)
+
+  report Report @relation(fields: [report_id], references: [id], onDelete: Cascade)
+
+  @@index([report_id])
+  @@index([status])
+  @@map("delivery")
+}
+
+model Audit {
+  id             String   @id @default(uuid()) @db.Uuid
+  report_id      String   @db.Uuid
+  member_id      String   @db.Uuid
+  action         String
+  changed_fields Json?
+  old_values     Json?
+  new_values     Json?
+  notes          String?
+  created_by     String?
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+
+  report Report @relation(fields: [report_id], references: [id], onDelete: Cascade)
+  member Member @relation(fields: [member_id], references: [id], onDelete: Cascade)
+
+  @@index([report_id])
+  @@index([member_id])
+  @@index([action])
+  @@index([created_at])
+  @@map("audit")
+}
+
+// Single-admin console login (replaces Supabase Auth). Credentials verified in
+// the Auth.js `authorize()` callback; sessions are JWT (no DB session table).
+model AdminUser {
+  id            String   @id @default(uuid()) @db.Uuid
+  email         String   @unique
+  password_hash String
+  name          String?
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("admin_user")
+}

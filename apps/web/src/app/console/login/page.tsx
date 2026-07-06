@@ -2,7 +2,7 @@
 
 import { FormEvent, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { signIn, onAuthStateChange } from '@/lib/auth'
+import { signIn } from '@/lib/auth'
 import { Button, Card, Input } from '@/components/ui'
 
 export default function LoginPage() {

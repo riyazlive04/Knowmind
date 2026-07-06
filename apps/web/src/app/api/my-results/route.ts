@@ -1,11 +1,10 @@
-import { createServiceClient } from '@/lib/supabase/service'
+import { prisma } from '@knowmind/db'
 import { NextRequest, NextResponse } from 'next/server'
 
 // POST /api/my-results  { contact }
 // Lets a returning respondent pull up their most recent assessment result by
-// email or phone. Anon has no SELECT on `member` / `submission` (RLS), so this
-// runs with the service-role key and only ever returns that one person's
-// latest submission — never a list.
+// email or phone. Only ever returns that one person's latest submission —
+// never a list.
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -17,21 +16,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Enter your email or phone number.' }, { status: 400 })
     }
 
-    let supabase
-    try {
-      supabase = createServiceClient()
-    } catch {
-      return NextResponse.json(
-        { error: 'Result lookup is not configured on the server (missing service-role key).' },
-        { status: 500 }
-      )
-    }
-
     // Resolve matching members by email (exact) or phone (digit suffix match,
     // since numbers are stored E.164 with a country code).
-    let memberQuery = supabase.from('member').select('id, name')
+    let members
     if (EMAIL_RE.test(value)) {
-      memberQuery = memberQuery.ilike('email', value)
+      members = await prisma.member.findMany({
+        where: { email: { equals: value, mode: 'insensitive' } },
+        select: { id: true, name: true },
+      })
     } else {
       const digits = value.replace(/\D/g, '')
       if (digits.length < 6) {
@@ -40,34 +32,29 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         )
       }
-      memberQuery = memberQuery.ilike('phone', `%${digits}`)
+      members = await prisma.member.findMany({
+        where: { phone: { endsWith: digits } },
+        select: { id: true, name: true },
+      })
     }
 
-    const { data: members, error: memberErr } = await memberQuery
-    if (memberErr) {
-      return NextResponse.json({ error: memberErr.message }, { status: 500 })
-    }
-    if (!members || members.length === 0) {
+    if (members.length === 0) {
       return NextResponse.json(
         { error: 'We couldn’t find any assessment for that email or phone. Double-check it, or take the assessment.' },
         { status: 404 }
       )
     }
 
-    const memberIds = members.map((m: any) => m.id)
+    const memberIds = members.map((m) => m.id)
 
     // Most recent submission across the matched member(s).
-    const { data: subs, error: subErr } = await supabase
-      .from('submission')
-      .select('*')
-      .in('member_id', memberIds)
-      .order('created_at', { ascending: false })
-      .limit(1)
+    const subs = await prisma.submission.findMany({
+      where: { member_id: { in: memberIds } },
+      orderBy: { created_at: 'desc' },
+      take: 1,
+    })
 
-    if (subErr) {
-      return NextResponse.json({ error: subErr.message }, { status: 500 })
-    }
-    if (!subs || subs.length === 0) {
+    if (subs.length === 0) {
       return NextResponse.json(
         { error: 'We found your details but no completed assessment yet. Take the assessment to see your profile.' },
         { status: 404 }

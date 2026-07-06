@@ -1,6 +1,6 @@
 # KnowMind - Development Guide
 
-## Monorepo Layout (restructured 2026-06-30)
+## Monorepo Layout (restructured 2026-06-30; DB migrated to Prisma/Neon 2026-07-06)
 
 Single repo, npm workspaces:
 
@@ -10,15 +10,24 @@ knowmind/
 │  ├─ web/      Next.js 14 frontend + console (was the repo root)
 │  └─ api/      Express backend (was Knowmind-app-backend/)
 └─ packages/
-   └─ shared/   @knowmind/shared — canonical EI scoring + types
+   ├─ shared/   @knowmind/shared — canonical EI scoring + types
+   └─ db/       @knowmind/db — Prisma schema + client singleton (Neon Postgres)
 ```
 
 - Run everything from the repo root: `npm install`, then `npm run build`
-  (builds shared → api → web). Per-app: `npm run dev:web`, `npm run dev:api`.
-- **`packages/shared` must be built before the apps consume it** (`npm run build:shared`);
-  it ships compiled JS from `dist/`.
-- Env files live with each app: `apps/web/.env` (NEXT_PUBLIC_SUPABASE_*),
-  `apps/api/.env` (service-role key). See each app's `.env.example`.
+  (builds shared → db → api → web). Per-app: `npm run dev:web`, `npm run dev:api`.
+- **`packages/shared` and `packages/db` must be built before the apps consume
+  them** (`npm run build:shared`, `npm run build:db`); both ship compiled JS from
+  `dist/`. `build:db` also runs `prisma generate`.
+- Database is **Neon Postgres via Prisma** (migrated off Supabase). Both apps
+  import the shared client: `import { prisma } from '@knowmind/db'`.
+  Schema: `packages/db/prisma/schema.prisma`. Commands (from repo root):
+  `npm run db:migrate` (create/apply migrations), `npm run db:seed`
+  (questions v1 + admin user), `npm run db:generate` (regenerate client).
+- Env files live with each app plus `packages/db`. All three need
+  `DATABASE_URL` (pooled) + `DIRECT_URL` (direct). `apps/web/.env` also needs
+  `AUTH_SECRET`; `packages/db/.env` also needs `ADMIN_EMAIL`/`ADMIN_PASSWORD`
+  for the seed. See each `.env.example`.
 - **Scoring is now defined once** in `packages/shared/src/index.ts` using the
   canonical 5/5/5/5/5/2 domain→item mapping. The old web engine used a divergent
   4/4/4/4/5/6 mapping and produced different scores for the same submission —
@@ -27,73 +36,56 @@ knowmind/
   `apps/api/src/lib/scoring.ts` just re-exports `@knowmind/shared`.
 
 > Paths in the sections below are relative to **`apps/web/`** (e.g.
-> `src/lib/supabase/client.ts` → `apps/web/src/lib/supabase/client.ts`).
+> `src/middleware.ts` → `apps/web/src/middleware.ts`).
 
-## Critical: SSR Auth Pattern (Session Cookies)
+## Data Access: Prisma + Neon (migrated off Supabase 2026-07-06)
 
-**Issue Solved (2026-06-29):** Login redirect loop - client authenticated but middleware couldn't see session.
+All database access goes through **Prisma** against **Neon Postgres**. There is
+no Supabase client and no RLS — every query runs with full DB privileges from
+server code, so authorization is enforced at the app layer (public routes vs the
+auth-gated console), NOT the database.
 
-**Root Cause:** Session stored client-side only; middleware reads server-side cookies.
+- **One client, one schema:** `import { prisma } from '@knowmind/db'`. Schema is
+  `packages/db/prisma/schema.prisma`. Model fields are snake_case to match the
+  JSON the frontend expects (e.g. `member_id`, `domain_scores`).
+- **Prisma cannot run in the browser.** Client components (`'use client'`) must
+  reach data through a server route (e.g. the assessment page POSTs to
+  `/api/assessment`), never a direct DB call.
+- **Nullable Json columns:** to store SQL NULL, pass `Prisma.DbNull` (not JS
+  `null`) — e.g. `raw_answers: rawAnswers ?? Prisma.DbNull`.
+- **`report.state` is mixed-case free text** (`Draft`/`Edited`/`Approved`/`Sent`/
+  `Failed`/`Hold`, plus lowercase `sent`/`failed` from the delivery path). It is
+  a `String`, deliberately not an enum — don't "normalize" it.
 
-**Solution:** Supabase SSR pattern with @supabase/ssr:
-1. **Browser client** (`src/lib/supabase/client.ts`) - Login page uses `createBrowserClient`
-2. **Server client** (`src/lib/supabase/server.ts`) - Middleware uses `createServerClient` with cookie handlers
-3. **Login flow** - After `signIn()`, call `router.refresh()` then `router.push('/console')`
-4. **Middleware** - Reads session from request cookies via `supabase.auth.getUser()`
+## Critical: Auth Pattern — Auth.js (NextAuth v5), single admin
 
-### Key Files:
-- `src/lib/supabase/client.ts` - Browser client (createBrowserClient)
-- `src/lib/supabase/server.ts` - Server client (createServerClient with cookies)
-- `src/middleware.ts` - Auth guard (getUser() from cookies)
-- `src/app/console/login/page.tsx` - Login with router.refresh()
-- `src/lib/auth.ts` - Auth helpers using browser client
+The console (`/console/*`) is gated by a **single admin login**. Auth is Auth.js
+v5 with a Credentials provider (email + bcrypt password in the `admin_user`
+table) and **stateless JWT sessions**.
 
-### Why This Matters:
-- **Never use** `createClient()` from `@supabase/supabase-js` in Next.js App Router (doesn't handle SSR cookies)
-- **Always use** `@supabase/ssr` with separate client/server modules
-- **Router.refresh()** syncs server state before redirect - CRITICAL for middleware to see cookies
-- **getUser()** reads from cookies (server-safe), NOT getSession() (client-only)
+### Edge-split config (required):
+- `src/auth.config.ts` — **edge-safe** (NO Prisma). Holds `pages.signIn` and the
+  `authorized` callback that guards `/console/*`. Imported by middleware.
+- `src/auth.ts` — full instance: spreads `authConfig`, adds the Credentials
+  provider (uses Prisma + `verifyPassword`, runs in Node). Exports
+  `{ handlers, auth, signIn, signOut }`.
+- `src/app/api/auth/[...nextauth]/route.ts` — `export const { GET, POST } = handlers`.
+- `src/middleware.ts` — `NextAuth(authConfig).auth` (edge; JWT only, no DB).
+- `src/lib/auth.ts` — client helpers wrapping `next-auth/react`
+  (`signIn`/`signOut`/`getSession`), no SessionProvider needed.
+- Server routes check `const session = await auth()` (see the delivery routes).
 
-### Testing Auth Changes:
-1. Login should succeed
-2. Redirect to /console (no bounce back to /console/login)
-3. Refresh page keeps you logged in
-4. Middleware never redirects authenticated users back to login
-5. Logout clears session and returns to login
+### Why the split matters:
+- Middleware runs on the **Edge runtime** — it can't import Prisma. Keep
+  `auth.config.ts` free of Node/Prisma imports; put the Credentials provider only
+  in `auth.ts`.
+- `AUTH_SECRET` (in `apps/web/.env`) signs the session JWT — required.
 
 ### Common Auth Bugs to Watch:
-- ❌ Removing `router.refresh()` from login handler → redirect loop returns
-- ❌ Using `getSession()` in middleware → session always null (client-side only)
-- ❌ Using `createClient()` from old package → cookies not persisted
-- ❌ Middleware checking client-side session context → won't work in Next.js
-
----
-
-## Critical: Anon INSERT with RLS (Assessment Submission)
-
-**Issue Solved (2026-06-29):** Assessment submission failed 403 "violates RLS for submission" even though anon INSERT policy existed.
-
-**Root Cause:** Code used `.insert(payload).select()` - the `.select()` tried to read the inserted row back, but anon has no SELECT permission on submission, so the entire operation failed.
-
-**Solution:** Never chain `.select()` after `.insert()` for anon-write tables.
-- ✅ Correct: `.insert(payload)` (insert only)
-- ❌ Wrong: `.insert(payload).select()` (insert + read = fails on read)
-- Build result from payload & computed scores, not from DB response
-
-### Key Files:
-- `src/app/assessment/page.tsx` - Client-side submission insert (line 105)
-- `src/app/api/assessment/route.ts` - Server-side submission insert (line 88)
-
-### Why This Matters:
-- Anon can only INSERT submissions (not SELECT)
-- `.select()` tries to read rows immediately after insert
-- RLS blocks the SELECT, failing the whole operation
-- Results page renders from `scores` computed client-side, not from DB
-
-### Common RLS INSERT Bugs to Watch:
-- ❌ Using `.insert().select()` on anon-write tables → fails on SELECT
-- ❌ Creating row with FK to restricted table → FK verification might fail if target is unreadable
-- ❌ Assuming INSERT-only tables need `.select()` → they don't; build result from payload
+- ❌ Importing `@/auth` (which pulls in Prisma) into `middleware.ts` → Edge build
+  fails. Middleware must import `./auth.config` only.
+- ❌ Missing `AUTH_SECRET` → sessions can't be signed/verified.
+- ❌ Doing DB work in a client component → Prisma isn't available in the browser.
 
 ---
 
@@ -125,37 +117,32 @@ knowmind/
 
 ### Adding a New Protected Page:
 1. Create `src/app/console/[feature]/page.tsx`
-2. Middleware automatically protects it (requires session)
-3. Use `createClient()` from `@/lib/supabase/client` if you need to fetch data
-4. For server-side queries, create separate server component with server client
+2. Middleware automatically protects it (requires the admin session)
+3. To fetch data, add a server route under `src/app/api/...` that uses
+   `import { prisma } from '@knowmind/db'`, and `fetch` it from the page.
 
-### Checking Auth in Components:
+### Checking Auth in a Client Component:
 ```typescript
 'use client'
-import { createClient } from '@/lib/supabase/client'
+import { getSession } from '@/lib/auth'
 
 export function MyComponent() {
   useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      console.log(user?.email)
-    })
+    getSession().then((session) => console.log(session?.user?.email))
   }, [])
 }
 ```
 
-### Server-Side Auth (for data fetching):
-Create separate server component, then import into client:
+### Auth in a Server Route:
 ```typescript
-// app/console/data.tsx (server component)
-import { createClient } from '@/lib/supabase/server'
+import { auth } from '@/auth'
+import { prisma } from '@knowmind/db'
 
-export async function DataFetcher() {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
-  
-  // Fetch data...
+export async function GET() {
+  const session = await auth()
+  if (!session?.user) return new Response('Unauthorized', { status: 401 })
+  const rows = await prisma.member.findMany()
+  // ...
 }
 ```
 
@@ -163,31 +150,43 @@ export async function DataFetcher() {
 
 ## Setup Reminders
 
-### Environment Variables (.env.local):
+### Environment Variables:
+Each of `apps/web/.env`, `apps/api/.env`, `packages/db/.env` needs the Neon
+connection. See each `.env.example`. Minimum:
 ```
-NEXT_PUBLIC_SUPABASE_URL=https://nzdqxupssyvhgkuyqynq.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGc...
+DATABASE_URL="postgresql://…-pooler…/neondb?sslmode=require"   # pooled (runtime)
+DIRECT_URL="postgresql://…(no -pooler)…/neondb?sslmode=require" # direct (migrations)
+# apps/web only:
+AUTH_SECRET="<base64 32 bytes>"
+# packages/db only (for the seed):
+ADMIN_EMAIL="admin@knowmind.in"
+ADMIN_PASSWORD="<strong password>"
 ```
 
-### Install Dependencies:
+### First-Time DB Setup:
 ```bash
-npm install @supabase/ssr next-themes
+npm install
+npm run db:migrate    # creates tables on Neon
+npm run db:seed       # question_version v1 (published) + admin user
 ```
 
 ### Dev Server Port:
 Check console output - likely 3000, but may be 3001+ if ports busy.
+Note: on Node < 22, run the API with `NODE_OPTIONS=--experimental-websocket`
+(Neon's driver needs a global WebSocket that older Node lacks).
 
 ### Testing Credentials:
-- Email: `admin@knowmind.in`
-- Password: Set in Supabase admin console (currently: SecurePass123!@)
+- Email: `admin@knowmind.in` (or your `ADMIN_EMAIL`)
+- Password: whatever you set as `ADMIN_PASSWORD` before seeding.
 
 ---
 
-## If Login Breaks Again:
+## If Login Breaks:
 
-1. **Redirect loop** (login → console → login) → Missing `router.refresh()` in login handler
-2. **403 on /console** → Middleware can't read session cookies (check cookie storage)
-3. **Session null in component** → Using wrong client (use `createClient()` from `/supabase/client`)
-4. **Dev server 404s** → Clean rebuild: `rm -rf .next && npm run build`
-
-Check commit `1154e8b` for the full SSR auth fix.
+1. **Redirect loop / always bounced to login** → `AUTH_SECRET` missing or changed,
+   or the `authorized` callback in `auth.config.ts` is wrong.
+2. **Edge build error importing Prisma** → `middleware.ts` must import
+   `./auth.config` (edge-safe), never `@/auth`.
+3. **"Invalid email or password" with correct creds** → admin not seeded, or the
+   email case differs (seed + `authorize` both lower-case it).
+4. **Dev server 404s** → Clean rebuild: `rm -rf .next && npm run build`.

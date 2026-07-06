@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { auth } from '@/auth'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
 
@@ -12,13 +12,10 @@ function backendHeaders(): Record<string, string> {
   return headers
 }
 
-// Gate on the Supabase session (same model as the rest of the console).
+// Gate on the Auth.js session (same model as the rest of the console).
 async function requireSession() {
-  const supabase = createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  return user
+  const session = await auth()
+  return session?.user ?? null
 }
 
 // GET /api/delivery        - proxy the delivery list

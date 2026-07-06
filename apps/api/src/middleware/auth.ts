@@ -4,7 +4,7 @@ import { Request, Response, NextFunction } from 'express'
  * Server-to-server auth for delivery routes.
  *
  * Browsers never hit the Express backend directly — they go through the Next.js
- * API routes, which are already gated by the Supabase session middleware. This
+ * API routes, which are already gated by the Auth.js session middleware. This
  * guard secures that Next.js → Express hop with a shared bearer token
  * (BACKEND_API_TOKEN).
  *

@@ -1,46 +1,30 @@
 'use client'
 
-import { createClient } from './supabase/client'
+import {
+  signIn as naSignIn,
+  signOut as naSignOut,
+  getSession as naGetSession,
+} from 'next-auth/react'
+
+// Client-side auth helpers backed by Auth.js (NextAuth v5). These wrap the
+// standalone next-auth/react functions so callers don't need a SessionProvider.
 
 export async function signIn(email: string, password: string) {
-  const supabase = createClient()
-  console.log('🔐 Attempting Supabase auth...')
-
-  const { data, error } = await supabase.auth.signInWithPassword({
+  const res = await naSignIn('credentials', {
     email,
     password,
+    redirect: false,
   })
-
-  console.log('📡 AUTH RESPONSE:')
-  console.log('  Has Data:', !!data)
-  console.log('  Has Error:', !!error)
-  if (data?.user) console.log('  ✅ User:', data.user.email)
-  if (error) console.log('  ❌ Error:', error.message)
-
-  if (error) throw error
-  return data
+  if (!res || res.error) {
+    throw new Error('Invalid email or password')
+  }
+  return res
 }
 
 export async function signOut() {
-  const supabase = createClient()
-  const { error } = await supabase.auth.signOut()
-  if (error) throw error
+  await naSignOut({ redirect: false })
 }
 
 export async function getSession() {
-  const supabase = createClient()
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
-  return session
-}
-
-export function onAuthStateChange(callback: (session: any) => void) {
-  const supabase = createClient()
-  const {
-    data: { subscription },
-  } = supabase.auth.onAuthStateChange((event, session) => {
-    callback(session)
-  })
-  return subscription
+  return naGetSession()
 }

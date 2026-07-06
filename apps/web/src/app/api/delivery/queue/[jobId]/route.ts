@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { auth } from '@/auth'
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:4000'
 
@@ -14,11 +14,8 @@ function backendHeaders(): Record<string, string> {
 // GET /api/delivery/queue/:jobId - poll live stagger-job progress
 export async function GET(_request: NextRequest, { params }: { params: { jobId: string } }) {
   try {
-    const supabase = createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const session = await auth()
+    if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const res = await fetch(`${BACKEND_URL}/api/delivery/queue/${params.jobId}`, {
       headers: backendHeaders(),

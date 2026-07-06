@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { prisma } from '@knowmind/db'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -6,26 +6,18 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const submissionId = searchParams.get('id')
 
-    const supabase = createClient()
-
     if (submissionId) {
       // Get single submission with member details
-      const { data: submission, error: subError } = await supabase
-        .from('submission')
-        .select('*')
-        .eq('id', submissionId)
-        .single()
+      const submission = await prisma.submission.findUnique({ where: { id: submissionId } })
 
-      if (subError) {
+      if (!submission) {
         return NextResponse.json({ error: 'Submission not found' }, { status: 404 })
       }
 
       // Get member details
-      const { data: member } = await supabase
-        .from('member')
-        .select('*')
-        .eq('id', submission.member_id)
-        .single()
+      const member = submission.member_id
+        ? await prisma.member.findUnique({ where: { id: submission.member_id } })
+        : null
 
       return NextResponse.json({
         submission,
@@ -41,49 +33,45 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '0')
     const pageSize = parseInt(searchParams.get('pageSize') || '10')
 
-    let query = supabase
-      .from('submission')
-      .select('id, member_id, round, overall, created_at', { count: 'exact' })
+    const where = round ? { round } : {}
 
-    // Apply filters
-    if (round) {
-      query = query.eq('round', round)
-    }
-
-    // Sort and paginate
-    query = query.order(sortBy, { ascending: sortOrder === 'asc' })
-    query = query.range(page * pageSize, (page + 1) * pageSize - 1)
-
-    const { data: submissions, error, count } = await query
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    const [submissions, count] = await Promise.all([
+      prisma.submission.findMany({
+        where,
+        select: { id: true, member_id: true, round: true, overall: true, created_at: true },
+        orderBy: { [sortBy]: sortOrder } as any,
+        skip: page * pageSize,
+        take: pageSize,
+      }),
+      prisma.submission.count({ where }),
+    ])
 
     // Get member details for all submissions
-    const memberIds = submissions?.map((s: any) => s.member_id) || []
-    const { data: members } = await supabase
-      .from('member')
-      .select('id, name')
-      .in('id', memberIds)
+    const memberIds = submissions
+      .map((s) => s.member_id)
+      .filter((id): id is string => Boolean(id))
+    const members = await prisma.member.findMany({
+      where: { id: { in: memberIds } },
+      select: { id: true, name: true },
+    })
 
-    const memberMap = new Map(members?.map((m: any) => [m.id, m.name]) || [])
+    const memberMap = new Map(members.map((m) => [m.id, m.name]))
 
     // Enrich submissions with member names and EI band
-    const enrichedSubmissions = submissions?.map((sub: any) => {
+    const enrichedSubmissions = submissions.map((sub: any) => {
       let band = 'Needs Support'
       if (sub.overall >= 4.0) band = 'High'
       else if (sub.overall >= 3.0) band = 'Moderate'
 
       return {
         ...sub,
-        member_name: memberMap.get(sub.member_id) || 'Unknown',
+        member_name: (sub.member_id && memberMap.get(sub.member_id)) || 'Unknown',
         ei_band: band,
       }
     })
 
     // Client-side filter by member name if provided
-    let filtered = enrichedSubmissions || []
+    let filtered = enrichedSubmissions
     if (memberName) {
       filtered = filtered.filter((s: any) =>
         s.member_name.toLowerCase().includes(memberName.toLowerCase())

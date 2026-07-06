@@ -1,41 +1,28 @@
-import { createClient } from '@/lib/supabase/server'
+import { prisma } from '@knowmind/db'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
   try {
-    const supabase = createClient()
-
     // Fetch all members with their latest submission
-    const { data: members, error: memberError } = await supabase
-      .from('member')
-      .select('*')
-      .order('created_at', { ascending: false })
+    const members = await prisma.member.findMany({ orderBy: { created_at: 'desc' } })
 
-    if (memberError) {
-      throw new Error(`Failed to fetch members: ${memberError.message}`)
-    }
-
-    // Fetch submissions for each member
-    const { data: submissions, error: submissionError } = await supabase
-      .from('submission')
-      .select('member_id, overall, domain_scores')
-      .eq('round', 'pre')
-      .order('created_at', { ascending: false })
-
-    if (submissionError) {
-      throw new Error(`Failed to fetch submissions: ${submissionError.message}`)
-    }
+    // Fetch pre-round submissions (most recent first) to pair with each member
+    const submissions = await prisma.submission.findMany({
+      where: { round: 'pre' },
+      select: { member_id: true, overall: true, domain_scores: true },
+      orderBy: { created_at: 'desc' },
+    })
 
     // Create a map of the latest submission per member
-    const latestSubmissionMap = new Map()
-    submissions?.forEach((sub) => {
-      if (!latestSubmissionMap.has(sub.member_id)) {
+    const latestSubmissionMap = new Map<string, any>()
+    submissions.forEach((sub) => {
+      if (sub.member_id && !latestSubmissionMap.has(sub.member_id)) {
         latestSubmissionMap.set(sub.member_id, sub)
       }
     })
 
     // Combine members with their submissions
-    const enrichedMembers = members?.map((member) => ({
+    const enrichedMembers = members.map((member) => ({
       ...member,
       submission: latestSubmissionMap.get(member.id),
     }))
@@ -71,7 +58,7 @@ export async function GET() {
       )[0]
 
       cohortStats = {
-        count: enrichedMembers?.length || 0,
+        count: enrichedMembers.length,
         average: parseFloat(average.toFixed(2)),
         weakestDomain,
         domainAverages: Object.fromEntries(
@@ -81,7 +68,7 @@ export async function GET() {
     }
 
     return NextResponse.json({
-      members: enrichedMembers || [],
+      members: enrichedMembers,
       cohortStats,
     })
   } catch (err: any) {

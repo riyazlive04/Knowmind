@@ -1,5 +1,5 @@
 import XLSX from 'xlsx'
-import { supabase } from './supabase'
+import { prisma, Prisma } from '@knowmind/db'
 
 interface ParsedRow {
   name: string
@@ -174,15 +174,11 @@ export async function computeImportDiff(
   }
 
   // Get existing members by name
-  const { data: existingMembers, error } = await supabase
-    .from('member')
-    .select('id, name')
+  const existingMembers = await prisma.member.findMany({
+    select: { id: true, name: true },
+  })
 
-  if (error) {
-    throw new Error(`Failed to fetch existing members: ${error.message}`)
-  }
-
-  const existingByName = new Map(existingMembers?.map((m) => [m.name, m.id]) || [])
+  const existingByName = new Map(existingMembers.map((m) => [m.name, m.id]))
   diff.existingCount = existingByName.size
 
   const seenNames = new Set<string>()
@@ -208,8 +204,8 @@ export async function executeImport(
   let updated = 0
 
   // Get existing members for updates
-  const { data: existingMembers } = await supabase.from('member').select('id, name')
-  const existingByName = new Map(existingMembers?.map((m) => [m.name, m.id]) || [])
+  const existingMembers = await prisma.member.findMany({ select: { id: true, name: true } })
+  const existingByName = new Map(existingMembers.map((m) => [m.name, m.id]))
 
   // Separate new and existing
   const newMembers: ParsedRow[] = []
@@ -232,19 +228,15 @@ export async function executeImport(
       business: row.business,
     }))
 
-    const { data: insertedMembers, error: insertError } = await supabase
-      .from('member')
-      .insert(memberInserts)
-      .select('id, name')
+    const insertedMembers = await prisma.member.createManyAndReturn({
+      data: memberInserts,
+      select: { id: true, name: true },
+    })
 
-    if (insertError) {
-      throw new Error(`Failed to insert members: ${insertError.message}`)
-    }
-
-    created = insertedMembers?.length || 0
+    created = insertedMembers.length
 
     // Map inserted members for submission creation
-    const insertedMap = new Map(insertedMembers?.map((m) => [m.name, m.id]) || [])
+    const insertedMap = new Map(insertedMembers.map((m) => [m.name, m.id]))
     for (const row of newMembers) {
       const memberId = insertedMap.get(row.name)
       if (memberId) {
@@ -259,7 +251,7 @@ export async function executeImport(
       member_id: memberId,
       round: 'pre',
       question_version_id: null, // Pre-assessment has no question_version
-      raw_answers: null, // No raw item answers
+      raw_answers: Prisma.DbNull, // No raw item answers
       domain_scores: row.domainScores,
       overall: row.overall,
       personal_competence: (row.domainScores['Self-Awareness'] +
@@ -273,11 +265,7 @@ export async function executeImport(
       free_text: row.freeText,
     }))
 
-    const { error: subError } = await supabase.from('submission').insert(submissionInserts)
-
-    if (subError) {
-      throw new Error(`Failed to create submissions: ${subError.message}`)
-    }
+    await prisma.submission.createMany({ data: submissionInserts })
   }
 
   // Compute cohort stats

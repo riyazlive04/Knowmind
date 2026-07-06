@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { prisma } from '@knowmind/db'
 
 export async function GET(request: NextRequest) {
   try {
@@ -7,61 +7,38 @@ export async function GET(request: NextRequest) {
     const memberId = searchParams.get('memberId')
     const reportId = searchParams.get('reportId')
 
-    const supabase = createClient()
-
     if (reportId) {
       // Load a single report by its own id (used by the editor).
-      const { data: report, error } = await supabase
-        .from('report')
-        .select('*')
-        .eq('id', reportId)
-        .single()
+      const report = await prisma.report.findUnique({ where: { id: reportId } })
 
-      if (error) {
+      if (!report) {
         return NextResponse.json({ error: 'Report not found' }, { status: 404 })
       }
 
-      const { data: member } = await supabase
-        .from('member')
-        .select('*')
-        .eq('id', report.member_id)
-        .single()
-
-      const { data: submission } = await supabase
-        .from('submission')
-        .select('*')
-        .eq('id', report.submission_id)
-        .single()
+      const member = await prisma.member.findUnique({ where: { id: report.member_id } })
+      const submission = await prisma.submission.findUnique({
+        where: { id: report.submission_id },
+      })
 
       return NextResponse.json({ success: true, report, member, submission })
     }
 
     if (memberId) {
       // Get report for a specific member
-      const { data: report, error } = await supabase
-        .from('report')
-        .select('*')
-        .eq('member_id', memberId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
+      const report = await prisma.report.findFirst({
+        where: { member_id: memberId },
+        orderBy: { created_at: 'desc' },
+      })
 
-      if (error) {
+      if (!report) {
         return NextResponse.json({ error: 'Report not found' }, { status: 404 })
       }
 
       // Get member and submission data
-      const { data: member } = await supabase
-        .from('member')
-        .select('*')
-        .eq('id', memberId)
-        .single()
-
-      const { data: submission } = await supabase
-        .from('submission')
-        .select('*')
-        .eq('id', report.submission_id)
-        .single()
+      const member = await prisma.member.findUnique({ where: { id: memberId } })
+      const submission = await prisma.submission.findUnique({
+        where: { id: report.submission_id },
+      })
 
       return NextResponse.json({
         success: true,
@@ -72,33 +49,26 @@ export async function GET(request: NextRequest) {
     }
 
     // List all reports
-    const { data: reports, error } = await supabase
-      .from('report')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    const reports = await prisma.report.findMany({ orderBy: { created_at: 'desc' } })
 
     // Get member names for reports
-    const memberIds = reports?.map((r: any) => r.member_id) || []
-    const { data: members } = await supabase
-      .from('member')
-      .select('id, name')
-      .in('id', memberIds)
+    const memberIds = reports.map((r) => r.member_id)
+    const members = await prisma.member.findMany({
+      where: { id: { in: memberIds } },
+      select: { id: true, name: true },
+    })
 
-    const memberMap = new Map(members?.map((m: any) => [m.id, m.name]) || [])
+    const memberMap = new Map(members.map((m) => [m.id, m.name]))
 
-    const enrichedReports = reports?.map((report: any) => ({
+    const enrichedReports = reports.map((report) => ({
       ...report,
       member_name: memberMap.get(report.member_id) || 'Unknown',
     }))
 
     return NextResponse.json({
       success: true,
-      reports: enrichedReports || [],
-      total: enrichedReports?.length || 0,
+      reports: enrichedReports,
+      total: enrichedReports.length,
     })
   } catch (err: any) {
     console.error('GET /api/reports error:', err)

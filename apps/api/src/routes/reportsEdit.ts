@@ -1,5 +1,5 @@
 import express from 'express'
-import { createClient } from '@supabase/supabase-js'
+import { prisma } from '@knowmind/db'
 
 const router = express.Router()
 
@@ -9,19 +9,10 @@ router.post('/:id/save', async (req, res) => {
     const { id } = req.params
     const { personalNote, whatYouShared, actionPlan, changedFields } = req.body
 
-    const supabase = createClient(
-      process.env.SUPABASE_URL || '',
-      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-    )
-
     // Fetch current report
-    const { data: currentReport, error: fetchError } = await supabase
-      .from('report')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const currentReport = await prisma.report.findUnique({ where: { id } })
 
-    if (fetchError || !currentReport) {
+    if (!currentReport) {
       return res.status(404).json({ error: 'Report not found' })
     }
 
@@ -32,12 +23,9 @@ router.post('/:id/save', async (req, res) => {
     if (changedFields?.actionPlan) updateData.action_plan = actionPlan
 
     // Update report
-    const { error: updateError } = await supabase
-      .from('report')
-      .update(updateData)
-      .eq('id', id)
-
-    if (updateError) {
+    try {
+      await prisma.report.update({ where: { id }, data: updateData })
+    } catch (updateError: any) {
       return res.status(500).json({ error: updateError.message })
     }
 
@@ -58,17 +46,19 @@ router.post('/:id/save', async (req, res) => {
       newValues.action_plan = actionPlan
     }
 
-    const { error: auditError } = await supabase.from('audit').insert({
-      report_id: id,
-      member_id: currentReport.member_id,
-      action: 'save',
-      changed_fields: changedFields,
-      old_values: oldValues,
-      new_values: newValues,
-      created_by: 'Kaleeswaran', // In production, get from auth session
-    })
-
-    if (auditError) {
+    try {
+      await prisma.audit.create({
+        data: {
+          report_id: id,
+          member_id: currentReport.member_id,
+          action: 'save',
+          changed_fields: changedFields ?? undefined,
+          old_values: oldValues,
+          new_values: newValues,
+          created_by: 'Kaleeswaran', // In production, get from auth session
+        },
+      })
+    } catch (auditError) {
       console.warn('Audit logging failed:', auditError)
       // Don't fail the request if audit fails
     }
@@ -89,19 +79,10 @@ router.post('/:id/approve', async (req, res) => {
   try {
     const { id } = req.params
 
-    const supabase = createClient(
-      process.env.SUPABASE_URL || '',
-      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-    )
-
     // Fetch current report
-    const { data: currentReport, error: fetchError } = await supabase
-      .from('report')
-      .select('*')
-      .eq('id', id)
-      .single()
+    const currentReport = await prisma.report.findUnique({ where: { id } })
 
-    if (fetchError || !currentReport) {
+    if (!currentReport) {
       return res.status(404).json({ error: 'Report not found' })
     }
 
@@ -113,27 +94,26 @@ router.post('/:id/approve', async (req, res) => {
     }
 
     // Update to Approved state
-    const { error: updateError } = await supabase
-      .from('report')
-      .update({ state: 'Approved' })
-      .eq('id', id)
-
-    if (updateError) {
+    try {
+      await prisma.report.update({ where: { id }, data: { state: 'Approved' } })
+    } catch (updateError: any) {
       return res.status(500).json({ error: updateError.message })
     }
 
     // Record audit entry
-    const { error: auditError } = await supabase.from('audit').insert({
-      report_id: id,
-      member_id: currentReport.member_id,
-      action: 'approve',
-      changed_fields: { state: true },
-      old_values: { state: currentReport.state },
-      new_values: { state: 'Approved' },
-      created_by: 'Kaleeswaran',
-    })
-
-    if (auditError) {
+    try {
+      await prisma.audit.create({
+        data: {
+          report_id: id,
+          member_id: currentReport.member_id,
+          action: 'approve',
+          changed_fields: { state: true },
+          old_values: { state: currentReport.state },
+          new_values: { state: 'Approved' },
+          created_by: 'Kaleeswaran',
+        },
+      })
+    } catch (auditError) {
       console.warn('Audit logging failed:', auditError)
     }
 
@@ -154,39 +134,29 @@ router.post('/:id/hold', async (req, res) => {
     const { id } = req.params
     const { reason } = req.body
 
-    const supabase = createClient(
-      process.env.SUPABASE_URL || '',
-      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-    )
+    const currentReport = await prisma.report.findUnique({ where: { id } })
 
-    const { data: currentReport, error: fetchError } = await supabase
-      .from('report')
-      .select('*')
-      .eq('id', id)
-      .single()
-
-    if (fetchError || !currentReport) {
+    if (!currentReport) {
       return res.status(404).json({ error: 'Report not found' })
     }
 
-    const { error: updateError } = await supabase
-      .from('report')
-      .update({ state: 'Hold' })
-      .eq('id', id)
-
-    if (updateError) {
+    try {
+      await prisma.report.update({ where: { id }, data: { state: 'Hold' } })
+    } catch (updateError: any) {
       return res.status(500).json({ error: updateError.message })
     }
 
-    const { error: auditError } = await supabase.from('audit').insert({
-      report_id: id,
-      member_id: currentReport.member_id,
-      action: 'hold',
-      notes: reason || null,
-      created_by: 'Kaleeswaran',
-    })
-
-    if (auditError) {
+    try {
+      await prisma.audit.create({
+        data: {
+          report_id: id,
+          member_id: currentReport.member_id,
+          action: 'hold',
+          notes: reason || null,
+          created_by: 'Kaleeswaran',
+        },
+      })
+    } catch (auditError) {
       console.warn('Audit logging failed:', auditError)
     }
 
@@ -206,24 +176,14 @@ router.get('/:id/audit', async (req, res) => {
   try {
     const { id } = req.params
 
-    const supabase = createClient(
-      process.env.SUPABASE_URL || '',
-      process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-    )
-
-    const { data: auditEntries, error } = await supabase
-      .from('audit')
-      .select('*')
-      .eq('report_id', id)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      return res.status(500).json({ error: error.message })
-    }
+    const auditEntries = await prisma.audit.findMany({
+      where: { report_id: id },
+      orderBy: { created_at: 'desc' },
+    })
 
     res.json({
       success: true,
-      audit: auditEntries || [],
+      audit: auditEntries,
     })
   } catch (error: any) {
     console.error('Audit fetch error:', error)

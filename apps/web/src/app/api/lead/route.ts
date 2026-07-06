@@ -1,14 +1,13 @@
-import { createServiceClient } from '@/lib/supabase/service'
+import { prisma } from '@knowmind/db'
 import { NextRequest, NextResponse } from 'next/server'
 
 // POST /api/lead
 // Captures a prospective respondent (name, email, phone + country code) BEFORE
 // the assessment and returns their member id so the submission can be linked.
 //
-// Anon cannot write to `member` (RLS: SELECT-only, see migration 006), so this
-// runs with the service-role key. Member is keyed by phone (UNIQUE): an existing
-// person re-taking the assessment updates their contact fields without losing
-// their status; a new person is created as a lead.
+// Member is keyed by phone (UNIQUE): an existing person re-taking the assessment
+// updates their contact fields without losing their status; a new person is
+// created as a lead.
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -43,67 +42,25 @@ export async function POST(request: NextRequest) {
 
     const phone = toE164(countryCode, phoneRaw)
 
-    let supabase
-    try {
-      supabase = createServiceClient()
-    } catch (e: any) {
-      console.error('Lead route misconfigured:', e.message)
-      return NextResponse.json(
-        { error: 'Lead capture is not configured on the server (missing service-role key).' },
-        { status: 500 }
-      )
-    }
-
     // Find existing member by phone (UNIQUE) — update contact, keep status.
-    const { data: existing, error: findError } = await supabase
-      .from('member')
-      .select('id')
-      .eq('phone', phone)
-      .maybeSingle()
-
-    if (findError) {
-      console.error('Lead lookup error:', findError)
-      return NextResponse.json({ error: findError.message }, { status: 500 })
-    }
+    const existing = await prisma.member.findUnique({
+      where: { phone },
+      select: { id: true },
+    })
 
     if (existing) {
-      const { data, error } = await supabase
-        .from('member')
-        .update({
-          name,
-          email,
-          country_code: countryCode,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existing.id)
-        .select('id')
-        .single()
-
-      if (error) {
-        console.error('Lead update error:', error)
-        return NextResponse.json({ error: error.message }, { status: 500 })
-      }
+      const data = await prisma.member.update({
+        where: { id: existing.id },
+        data: { name, email, country_code: countryCode },
+        select: { id: true },
+      })
       return NextResponse.json({ memberId: data.id, created: false })
     }
 
-    const { data, error } = await supabase
-      .from('member')
-      .insert([
-        {
-          name,
-          email,
-          phone,
-          country_code: countryCode,
-          status: 'lead',
-        },
-      ])
-      .select('id')
-      .single()
-
-    if (error) {
-      console.error('Lead insert error:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    const data = await prisma.member.create({
+      data: { name, email, phone, country_code: countryCode, status: 'lead' },
+      select: { id: true },
+    })
 
     return NextResponse.json({ memberId: data.id, created: true })
   } catch (err: any) {

@@ -1,8 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { scoreSubmission } from '@/lib/scoring'
 import AssessmentForm from '@/components/assessment/AssessmentForm'
 import ResultsDisplay from '@/components/assessment/ResultsDisplay'
 import LeadCaptureForm, { LeadDetails } from '@/components/assessment/LeadCaptureForm'
@@ -32,29 +30,12 @@ export default function AssessmentPage() {
   useEffect(() => {
     const loadQuestions = async () => {
       try {
-        const supabase = createClient()
+        // Load published questions from the server (Prisma/Neon).
+        const res = await fetch('/api/assessment')
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Failed to load assessment')
 
-        // Query Supabase directly for published questions (anon read access via RLS)
-        const { data, error: queryError } = await supabase
-          .from('question_version')
-          .select('*')
-          .eq('status', 'published')
-          .order('version_no', { ascending: false })
-          .limit(1)
-
-        console.log('Question fetch result:', { data, queryError })
-
-        if (queryError) {
-          console.error('Supabase RLS/query error:', queryError)
-          throw queryError
-        }
-        if (!data || data.length === 0) {
-          console.error('No published questions found. Data:', data)
-          throw new Error('No published question version found')
-        }
-
-        console.log('Loaded question version:', data[0])
-        setQuestionVersion(data[0])
+        setQuestionVersion(data.questionVersion)
       } catch (err: any) {
         console.error('Assessment load error:', err)
         setError(err.message || 'Failed to load assessment')
@@ -67,70 +48,23 @@ export default function AssessmentPage() {
   const handleSubmit = async (rawAnswers: number[], freeText: Record<string, string>) => {
     try {
       setSubmitting(true)
-      const supabase = createClient()
 
-      // Get latest published questions
-      const { data: qvData, error: qvError } = await supabase
-        .from('question_version')
-        .select('*')
-        .eq('status', 'published')
-        .order('version_no', { ascending: false })
-        .limit(1)
+      // Submit to the server: it scores, persists the submission (linked to the
+      // member captured at the lead gate), and returns the computed scores.
+      const res = await fetch('/api/assessment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rawAnswers, freeText, memberId }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to submit assessment')
 
-      if (qvError) throw qvError
-      if (!qvData || qvData.length === 0) throw new Error('No published question version found')
-
-      const questionVersion = qvData[0]
-
-      // Score locally
-      const scores = scoreSubmission(rawAnswers)
-
-      // Build submission payload - only include columns that exist
-      const submissionPayload = {
-        round: 'pre',
-        question_version_id: questionVersion.id,
-        raw_answers: rawAnswers,
-        domain_scores: scores.domainScores,
-        overall: scores.overall,
-        free_text: freeText,
-        // Link to the member captured at the lead gate (anon can SELECT member
-        // for FK verification; member was created server-side via /api/lead).
-        ...(memberId && { member_id: memberId }),
-        // Add competence columns - will be ignored if columns don't exist
-        ...(scores.personalCompetence !== undefined && { personal_competence: scores.personalCompetence }),
-        ...(scores.socialCompetence !== undefined && { social_competence: scores.socialCompetence }),
-      }
-
-      console.log('Submitting payload:', submissionPayload)
-
-      // Insert submission directly to Supabase (anon insert access via RLS)
-      // Do NOT use .select() - anon cannot SELECT submissions, only INSERT them
-      const { error: subError } = await supabase
-        .from('submission')
-        .insert([submissionPayload])
-
-      console.log('Submission insert response:', { error: subError })
-
-      if (subError) {
-        console.error('SUBMIT ERROR:', JSON.stringify(subError, null, 2))
-        console.error('error.code:', subError.code)
-        console.error('error.message:', subError.message)
-        console.error('error.details:', subError.details)
-        console.error('error.hint:', subError.hint)
-        throw subError
-      }
-
-      console.log('Success! Submission inserted')
       setResults({
-        submission: submissionPayload,
-        scores,
+        submission: data.submission,
+        scores: data.scores,
       })
     } catch (err: any) {
-      console.error('SUBMIT ERROR:', JSON.stringify(err, null, 2))
-      console.error('error.code:', err.code)
-      console.error('error.message:', err.message)
-      console.error('error.details:', err.details)
-      console.error('error.hint:', err.hint)
+      console.error('SUBMIT ERROR:', err?.message, err)
       setError(err.message || 'Failed to submit assessment')
     } finally {
       setSubmitting(false)

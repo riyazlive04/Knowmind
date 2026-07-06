@@ -1,9 +1,8 @@
 /**
  * Delivery orchestration (M5) — records WhatsApp sends in the `delivery` table
- * and advances report state. Uses the service-role Supabase client (the
- * `delivery` table is service-role only under RLS).
+ * and advances report state. Uses the shared Prisma client (@knowmind/db).
  */
-import { supabase } from './supabase'
+import { prisma } from '@knowmind/db'
 import { sendWhatsAppText } from './evolution'
 
 export interface DeliveryRecord {
@@ -17,6 +16,21 @@ export interface DeliveryRecord {
   sent_at: string | null
 }
 
+// Prisma returns `sent_at` as a Date; the DeliveryRecord contract (and the JSON
+// the API previously returned via Supabase) uses an ISO string.
+function serializeDelivery(d: {
+  id: string
+  report_id: string
+  channel: string
+  status: string
+  evolution_message_id: string | null
+  attempt: number
+  error: string | null
+  sent_at: Date | null
+}): DeliveryRecord {
+  return { ...d, sent_at: d.sent_at ? d.sent_at.toISOString() : null }
+}
+
 /**
  * Deliver a generated report to its member over WhatsApp.
  *
@@ -24,79 +38,72 @@ export interface DeliveryRecord {
  * row → send via Evolution → update the row (sent/failed) and the report state.
  */
 export async function deliverReport(reportId: string): Promise<DeliveryRecord> {
-  const { data: report, error: reportErr } = await supabase
-    .from('report')
-    .select('id, member_id, state, what_you_shared, share_link_token, member:member_id (name, phone)')
-    .eq('id', reportId)
-    .single()
+  const report = await prisma.report.findUnique({
+    where: { id: reportId },
+    select: {
+      id: true,
+      member_id: true,
+      state: true,
+      what_you_shared: true,
+      share_link_token: true,
+      member: { select: { name: true, phone: true } },
+    },
+  })
 
-  if (reportErr || !report) {
+  if (!report) {
     throw new Error(`Report not found: ${reportId}`)
   }
 
-  const member = (report as any).member
-  const phone: string | undefined = member?.phone
+  const member = report.member
+  const phone = member?.phone ?? undefined
   if (!phone) {
     throw new Error(`Member ${report.member_id} has no phone number on file`)
   }
 
   // Create the pending delivery row first so a crash mid-send is still recorded.
-  const { data: pending, error: insertErr } = await supabase
-    .from('delivery')
-    .insert({ report_id: reportId, channel: 'whatsapp', status: 'pending', attempt: 1 })
-    .select()
-    .single()
+  const pending = await prisma.delivery.create({
+    data: { report_id: reportId, channel: 'whatsapp', status: 'pending', attempt: 1 },
+  })
 
-  if (insertErr || !pending) {
-    throw new Error(`Failed to create delivery record: ${insertErr?.message}`)
-  }
-
-  const message = buildReportMessage(member?.name, (report as any).what_you_shared)
+  const message = buildReportMessage(member?.name, report.what_you_shared ?? undefined)
 
   try {
     const result = await sendWhatsAppText(phone, message)
 
-    const { data: updated } = await supabase
-      .from('delivery')
-      .update({
+    const updated = await prisma.delivery.update({
+      where: { id: pending.id },
+      data: {
         status: result.status,
         evolution_message_id: result.messageId,
-        sent_at: new Date().toISOString(),
+        sent_at: new Date(),
         error: null,
-      })
-      .eq('id', pending.id)
-      .select()
-      .single()
+      },
+    })
 
     // Only flip the report to 'sent' on a real send (not a stub).
     if (result.sent) {
-      await supabase.from('report').update({ state: 'sent' }).eq('id', reportId)
+      await prisma.report.update({ where: { id: reportId }, data: { state: 'sent' } })
     }
 
-    return updated as DeliveryRecord
+    return serializeDelivery(updated)
   } catch (err: any) {
-    const { data: failed } = await supabase
-      .from('delivery')
-      .update({ status: 'failed', error: err.message })
-      .eq('id', pending.id)
-      .select()
-      .single()
+    const failed = await prisma.delivery.update({
+      where: { id: pending.id },
+      data: { status: 'failed', error: err.message },
+    })
 
-    await supabase.from('report').update({ state: 'failed' }).eq('id', reportId)
-    return failed as DeliveryRecord
+    await prisma.report.update({ where: { id: reportId }, data: { state: 'failed' } })
+    return serializeDelivery(failed)
   }
 }
 
 /** List delivery records (most recent first). */
 export async function listDeliveries(limit = 100): Promise<DeliveryRecord[]> {
-  const { data, error } = await supabase
-    .from('delivery')
-    .select('*')
-    .order('sent_at', { ascending: false, nullsFirst: false })
-    .limit(limit)
-
-  if (error) throw new Error(error.message)
-  return (data ?? []) as DeliveryRecord[]
+  const rows = await prisma.delivery.findMany({
+    orderBy: { sent_at: { sort: 'desc', nulls: 'last' } },
+    take: limit,
+  })
+  return rows.map(serializeDelivery)
 }
 
 /**
@@ -117,11 +124,10 @@ export async function updateDeliveryStatusByMessageId(
   messageId: string,
   status: 'sent' | 'delivered' | 'read' | 'failed'
 ): Promise<boolean> {
-  const { data: existing } = await supabase
-    .from('delivery')
-    .select('id, status')
-    .eq('evolution_message_id', messageId)
-    .single()
+  const existing = await prisma.delivery.findFirst({
+    where: { evolution_message_id: messageId },
+    select: { id: true, status: true },
+  })
 
   if (!existing) return false
 
@@ -130,8 +136,12 @@ export async function updateDeliveryStatusByMessageId(
   const next = STATUS_RANK[status] ?? 0
   if (status !== 'failed' && next <= current) return false
 
-  const { error } = await supabase.from('delivery').update({ status }).eq('id', existing.id)
-  return !error
+  try {
+    await prisma.delivery.update({ where: { id: existing.id }, data: { status } })
+    return true
+  } catch {
+    return false
+  }
 }
 
 function buildReportMessage(name: string | undefined, whatYouShared: string | undefined): string {

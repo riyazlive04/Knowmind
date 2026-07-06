@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/service'
+import { prisma } from '@knowmind/db'
 
 // POST /api/reports/bulk/approve  { reportIds: string[] }
 // Marks the given reports as Approved (locks them from further editing).
-// Uses the service-role client so it works regardless of RLS on the console.
 export async function POST(request: NextRequest) {
   try {
     const { reportIds } = await request.json()
@@ -15,29 +14,13 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    let supabase
-    try {
-      supabase = createServiceClient()
-    } catch {
-      return NextResponse.json(
-        { success: false, message: 'Report management is not configured (missing service-role key).' },
-        { status: 500 }
-      )
-    }
-
     // Don't re-approve reports that are already locked/sent.
-    const { data, error } = await supabase
-      .from('report')
-      .update({ state: 'Approved', updated_at: new Date().toISOString() })
-      .in('id', reportIds)
-      .not('state', 'in', '("Approved","Sent")')
-      .select('id')
+    const result = await prisma.report.updateMany({
+      where: { id: { in: reportIds }, state: { notIn: ['Approved', 'Sent'] } },
+      data: { state: 'Approved' },
+    })
 
-    if (error) {
-      return NextResponse.json({ success: false, message: error.message }, { status: 500 })
-    }
-
-    const approved = data?.length ?? 0
+    const approved = result.count
     const skipped = reportIds.length - approved
     return NextResponse.json({
       success: true,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/service'
+import { prisma, Prisma } from '@knowmind/db'
 
 // POST /api/reports/[id]/approve
 // Locks the report by moving it to the "Approved" state.
@@ -10,29 +10,19 @@ export async function POST(
   try {
     const reportId = params.id
 
-    let supabase
     try {
-      supabase = createServiceClient()
-    } catch {
-      return NextResponse.json(
-        { error: 'Report approval is not configured (missing service-role key).' },
-        { status: 500 }
-      )
-    }
-
-    const { data, error } = await supabase
-      .from('report')
-      .update({ state: 'Approved', updated_at: new Date().toISOString() })
-      .eq('id', reportId)
-      .select('*')
-      .single()
-
-    if (error) {
-      if ((error as any).code === 'PGRST116')
+      const data = await prisma.report.update({
+        where: { id: reportId },
+        data: { state: 'Approved' },
+      })
+      return NextResponse.json({ success: true, report: data })
+    } catch (error) {
+      // P2025 = record to update not found
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         return NextResponse.json({ error: 'Report not found' }, { status: 404 })
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+      throw error
     }
-    return NextResponse.json({ success: true, report: data })
   } catch (err: any) {
     console.error('POST /api/reports/[id]/approve error:', err)
     return NextResponse.json({ error: err.message }, { status: 500 })

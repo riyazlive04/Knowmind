@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { prisma } from '@knowmind/db'
 import fs from 'fs'
 import path from 'path'
 import DocxParser from 'docx-parser'
@@ -102,11 +102,6 @@ function findReportDocx(memberName: string, docxDir: string): string | null {
 
 // Generate reports for all 42 members by parsing docx files
 export async function generateAllReports(docxDir: string): Promise<ReportGenerationResult[]> {
-  const supabase = createClient(
-    process.env.SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-  )
-
   const results: ReportGenerationResult[] = []
   const parseErrors: ParseError[] = []
 
@@ -118,13 +113,7 @@ export async function generateAllReports(docxDir: string): Promise<ReportGenerat
 
   try {
     // Get all members
-    const { data: members, error: membersError } = await supabase
-      .from('member')
-      .select('id, name')
-
-    if (membersError) {
-      throw new Error(`Failed to fetch members: ${membersError.message}`)
-    }
+    const members = await prisma.member.findMany({ select: { id: true, name: true } })
 
     console.log(`[Phase 8] Starting report generation for ${members?.length || 0} members`)
     console.log(`[Phase 8] Reading docx narratives from: ${docxDir}`)
@@ -132,14 +121,11 @@ export async function generateAllReports(docxDir: string): Promise<ReportGenerat
     for (const member of members || []) {
       try {
         // Get member's pre submission
-        const { data: submission, error: subError } = await supabase
-          .from('submission')
-          .select('*')
-          .eq('member_id', member.id)
-          .eq('round', 'pre')
-          .single()
+        const submission = await prisma.submission.findFirst({
+          where: { member_id: member.id, round: 'pre' },
+        })
 
-        if (subError || !submission) {
+        if (!submission) {
           results.push({
             memberId: member.id,
             memberName: member.name,
@@ -197,31 +183,30 @@ export async function generateAllReports(docxDir: string): Promise<ReportGenerat
         }
 
         // Create report row with imported narratives
-        const { error: createError } = await supabase
-          .from('report')
-          .insert({
-            member_id: member.id,
-            submission_id: submission.id,
-            state: 'Draft',
-            personal_note: narrative.personalNote,
-            what_you_shared: narrative.whatYouShared,
-            action_plan: narrative.actionPlan,
+        try {
+          await prisma.report.create({
+            data: {
+              member_id: member.id,
+              submission_id: submission.id,
+              state: 'Draft',
+              personal_note: narrative.personalNote,
+              what_you_shared: narrative.whatYouShared,
+              action_plan: narrative.actionPlan,
+            },
           })
-
-        if (createError) {
+          results.push({
+            memberId: member.id,
+            memberName: member.name,
+            success: true,
+            message: `Report generated with narratives imported from ${path.basename(docxPath)}`,
+          })
+        } catch (createError: any) {
           results.push({
             memberId: member.id,
             memberName: member.name,
             success: false,
             message: `Failed to create report: ${createError.message}`,
             error: createError.message,
-          })
-        } else {
-          results.push({
-            memberId: member.id,
-            memberName: member.name,
-            success: true,
-            message: `Report generated with narratives imported from ${path.basename(docxPath)}`,
           })
         }
       } catch (error: any) {
@@ -251,22 +236,10 @@ export async function generateAllReports(docxDir: string): Promise<ReportGenerat
 
 // Get report for a member
 export async function getReport(memberId: string) {
-  const supabase = createClient(
-    process.env.SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-  )
-
-  const { data: report, error } = await supabase
-    .from('report')
-    .select('*')
-    .eq('member_id', memberId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()
-
-  if (error) {
-    throw new Error(`Failed to fetch report: ${error.message}`)
-  }
+  const report = await prisma.report.findFirst({
+    where: { member_id: memberId },
+    orderBy: { created_at: 'desc' },
+  })
 
   return report
 }

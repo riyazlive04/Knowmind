@@ -1,32 +1,21 @@
-import { createClient } from '@/lib/supabase/server'
+import { prisma, Prisma } from '@knowmind/db'
 import { scoreSubmission } from '@/lib/scoring'
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const supabase = createClient()
+    // Get latest published question version
+    const questionVersion = await prisma.questionVersion.findFirst({
+      where: { status: 'published' },
+      orderBy: { version_no: 'desc' },
+    })
 
-    // Get published question version - remove .single() and handle manually
-    const { data, error } = await supabase
-      .from('question_version')
-      .select('*')
-      .eq('status', 'published')
-      .order('version_no', { ascending: false })
-      .limit(1)
-
-    if (error) {
-      console.error('Supabase query error:', error)
-      throw error
-    }
-
-    if (!data || data.length === 0) {
+    if (!questionVersion) {
       return NextResponse.json(
         { error: 'No published question version found' },
         { status: 404 }
       )
     }
-
-    const questionVersion = data[0]
 
     return NextResponse.json({ questionVersion })
   } catch (err: any) {
@@ -41,71 +30,45 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { rawAnswers, freeText } = body
-
-    const supabase = createClient()
+    const { rawAnswers, freeText, memberId } = body
 
     // Get latest published question version
-    const { data: qvData, error: qvError } = await supabase
-      .from('question_version')
-      .select('*')
-      .eq('status', 'published')
-      .order('version_no', { ascending: false })
-      .limit(1)
+    const questionVersion = await prisma.questionVersion.findFirst({
+      where: { status: 'published' },
+      orderBy: { version_no: 'desc' },
+    })
 
-    if (qvError) {
-      console.error('Supabase query error:', qvError)
-      throw qvError
-    }
-
-    if (!qvData || qvData.length === 0) {
+    if (!questionVersion) {
       return NextResponse.json(
         { error: 'No published question version found' },
         { status: 404 }
       )
     }
 
-    const questionVersion = qvData[0]
-
     // Score the submission
     const scores = scoreSubmission(rawAnswers)
 
-    // Store submission (anon key allows insert)
-    // Do NOT use .select() - anon cannot SELECT submissions, only INSERT them
+    // Store submission
     const submissionPayload = {
+      member_id: memberId ?? null,
       round: 'pre',
       question_version_id: questionVersion.id,
-      raw_answers: rawAnswers,
+      raw_answers: rawAnswers ?? Prisma.DbNull,
       domain_scores: scores.domainScores,
       overall: scores.overall,
       personal_competence: scores.personalCompetence,
       social_competence: scores.socialCompetence,
-      free_text: freeText,
+      free_text: freeText ?? Prisma.DbNull,
     }
 
-    const { error: subError } = await supabase
-      .from('submission')
-      .insert([submissionPayload])
-
-    if (subError) {
-      console.error('SUBMIT ERROR:', JSON.stringify(subError, null, 2))
-      console.error('error.code:', subError.code)
-      console.error('error.message:', subError.message)
-      console.error('error.details:', subError.details)
-      console.error('error.hint:', subError.hint)
-      throw subError
-    }
+    const submission = await prisma.submission.create({ data: submissionPayload })
 
     return NextResponse.json({
-      submission: submissionPayload,
-      scores
+      submission,
+      scores,
     })
   } catch (err: any) {
-    console.error('SUBMIT ERROR:', JSON.stringify(err, null, 2))
-    console.error('error.code:', err.code)
-    console.error('error.message:', err.message)
-    console.error('error.details:', err.details)
-    console.error('error.hint:', err.hint)
+    console.error('SUBMIT ERROR:', err?.message, err)
     return NextResponse.json(
       { error: err.message || 'Failed to submit assessment' },
       { status: 500 }
